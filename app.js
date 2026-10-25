@@ -283,19 +283,22 @@ function renderList(list, title, sub) {
       : emptyHTML("这里还没有内容", q ? "换个关键词试试。" : "点击右上角「新增条目」添加第一条密码。")}`;
   bindCards(); bindPager();
 }
-/* 卡片名称/网站行尾的内联元信息：分类小标签 + 备注
- * 替代原卡片底部独立 meta 行——内容挪到名称和网站后面，卡片更矮 */
-function cardMetaLine(e) {
+/* 卡片标题行：名称 + 分类小标签（标签紧跟名称后） */
+function cardTitleLine(e) {
   const tag = e.cat ? `<span class="itag" title="${escAttr(e.cat)}">${esc(e.cat)}</span>` : "";
-  const note = e.note ? `<span class="mn2" title="${escAttr(e.note)}">${esc(e.note)}</span>` : "";
-  if (!e.url && !tag && !note) return "";
+  return `<div class="nmline"><span class="nm">${esc(e.name)}</span>${tag}</div>`;
+}
+/* 卡片次行：网址 + 备注（都没有则整行省略，不留空行） */
+function cardSubLine(e) {
   const url = e.url ? `<span class="usr" data-cb="${escAttr(e.url)}" data-tip="已复制网址" title="点击复制">${esc(e.url)}</span>` : "";
-  return `<div class="sub2">${url}${tag}${note}</div>`;
+  const note = e.note ? `<span class="mn2" title="${escAttr(e.note)}">${esc(e.note)}</span>` : "";
+  if (!url && !note) return "";
+  return `<div class="sub2">${url}${note}</div>`;
 }
 function cardHTML(e) {
   return `<div class="card" data-id="${e.id}">
     <div class="top">
-      <div class="ti"><div class="nm">${esc(e.name)}</div>${cardMetaLine(e)}</div>
+      <div class="ti">${cardTitleLine(e)}${cardSubLine(e)}</div>
       <button class="star ${e.fav ? "on" : ""}" data-star="${e.id}">${e.fav ? "★" : "☆"}</button></div>
     <div class="crow"><span class="cl">账号</span><span class="cv ${e.user ? "" : "ph"}">${e.user ? esc(e.user) : "未设置账号"}</span>${e.user ? `
       <button class="icbtn" data-cb="${escAttr(e.user)}" data-tip="已复制账号" title="复制账号">${I.copy}</button>` : ""}</div>
@@ -348,7 +351,7 @@ function bindEntryBtns() {
 function trashCardHTML(e) {
   return `<div class="card trash-card" data-id="${e.id}">
     <div class="top">
-      <div class="ti"><div class="nm">${esc(e.name)}</div>${cardMetaLine(e)}</div>
+      <div class="ti">${cardTitleLine(e)}${cardSubLine(e)}</div>
       <div class="ops">
         <button class="star restore" data-restore="${e.id}" title="恢复到保险库">${I.restore}</button>
         <button class="icbtn purge" data-purge="${e.id}" title="永久删除">${I.trash}</button>
