@@ -1,0 +1,12 @@
+# Vault Worker 部署配置（Cloudflare Workers Builds 读取本文件自动部署）
+# 作用：声明 Worker 入口脚本 + 静态资产目录，push 到 GitHub 即自动部署。
+name = "vault"
+main = "worker.js"
+compatibility_date = "2025-01-01"
+
+# 静态文件（index.html / app.js / styles.css 等）与 worker.js 同目录
+[assets]
+directory = "./"
+
+# 注意：VAULT_API_KEY 不写在这里（会进仓库泄密），
+# 部署后在 Dashboard → 本 Worker → Settings → 变量和机密 里添加（加密类型）。
