@@ -83,6 +83,17 @@ async function doUnlock() {
   DB.cats = (DB.cats || [])
     .map(c => typeof c === "string" ? c : (c && c.name) || "")
     .filter(Boolean);
+  /* 旧数据升级：库里还是明文账号密码的条目，解锁后自动转存为密文（一次性） */
+  const legacy = DB.entries.filter(e => e._legacy);
+  if (legacy.length) {
+    try {
+      const { store } = getStore();
+      for (const e of legacy) { await store.saveEntry(KEY, e); delete e._legacy; }
+      toast("已将 " + legacy.length + " 条旧数据升级为加密存储");
+    } catch (err) {
+      console.warn("旧数据加密迁移失败（下次解锁重试）", err);
+    }
+  }
   enterApp();
 }
 
@@ -288,12 +299,10 @@ function cardTitleLine(e) {
   const tag = e.cat ? `<span class="itag" title="${escAttr(e.cat)}">${esc(e.cat)}</span>` : "";
   return `<div class="nmline"><span class="nm">${esc(e.name)}</span>${tag}</div>`;
 }
-/* 卡片次行：网址 + 备注（都没有则整行省略，不留空行） */
+/* 卡片次行：网址（备注暂不在卡片展示；没有网址则整行省略，不留空行） */
 function cardSubLine(e) {
-  const url = e.url ? `<span class="usr" data-cb="${escAttr(e.url)}" data-tip="已复制网址" title="点击复制">${esc(e.url)}</span>` : "";
-  const note = e.note ? `<span class="mn2" title="${escAttr(e.note)}">${esc(e.note)}</span>` : "";
-  if (!url && !note) return "";
-  return `<div class="sub2">${url}${note}</div>`;
+  if (!e.url) return "";
+  return `<div class="sub2"><span class="usr" data-cb="${escAttr(e.url)}" data-tip="已复制网址" title="点击复制">${esc(e.url)}</span></div>`;
 }
 function cardHTML(e) {
   return `<div class="card" data-id="${e.id}">
