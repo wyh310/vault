@@ -213,6 +213,9 @@ input,select,textarea{font-family:inherit}
 .b-ghost:hover{color:var(--text);border-color:var(--text)}
 .b-edit{background:var(--primary);color:#fff}
 .b-edit:hover{opacity:.85}
+.b-edit.loading{opacity:.75;pointer-events:none}
+.b-edit.loading::before{content:"";display:inline-block;width:14px;height:14px;margin-right:7px;vertical-align:-2px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:vspin .7s linear infinite}
+@keyframes vspin{to{transform:rotate(360deg)}}
 .b-danger{background:var(--card);color:var(--danger);border:1px solid rgba(208,69,58,.35)}
 .b-danger:hover{background:rgba(208,69,58,.08)}
 .b-danger.solid{background:var(--danger);color:#fff;border-color:var(--danger)}
