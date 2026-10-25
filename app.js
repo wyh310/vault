@@ -11,6 +11,9 @@ let currentView = "vault";
 /* 每页卡片数：桌面 12（3 列×4 行）；手机端（≤760px）10 */
 const pageSize = () => window.innerWidth <= 760 ? 10 : 12;
 let curPage = 1;        // 当前页码（保险库/收藏夹/回收站共用）
+const savingFav = new Set();  // 正在后台保存收藏状态的条目 id（防连点）
+const restoring = new Set();  // 正在恢复的条目 id（防连点）
+const purging = new Set();    // 正在永久删除的条目 id（防连点）
 let idleTimer = null;
 const IDLE_MS = 5 * 60 * 1000; // 闲置 5 分钟自动锁定
 
@@ -44,7 +47,8 @@ async function doSetup() {
     const { salt, verifier } = await VaultCrypto.setup(p1);
     localStorage.setItem("vault.auth", JSON.stringify({ salt, verifier, created: Date.now() }));
     KEY = await VaultCrypto.verify(p1, salt, verifier);
-    DB = { entries: seedEntries(), cats: seedCats() };
+    /* apisql 模式初始化空库（不写演示数据，避免污染 MySQL）；local 模式带测试种子 */
+    DB = getStore().mode === "apisql" ? { entries: [], cats: [] } : { entries: seedEntries(), cats: seedCats() };
     await persist();
     enterApp();
   } catch (e) {
@@ -103,6 +107,26 @@ function resetIdle() {
 async function persist() {
   const { store } = getStore();
   await store.save(KEY, DB);
+}
+/* ---------- 快路径持久化（避免全量重存导致交互卡顿） ----------
+ * apisql：只 upsert 受影响的条目 + 分类 diff（各 1~N 次轻量请求）；
+ * local  ：整包加密存（同步、极快），行为与原来一致。
+ * ----------------------------------------------------------- */
+async function persistEntries(list) {
+  const { store, mode } = getStore();
+  if (mode === "apisql") {
+    for (const e of list) await store.saveEntry(KEY, e);
+    await store.syncCats(DB.cats);
+  } else {
+    await persist();
+  }
+}
+async function persistEntry(e) { return persistEntries([e]); }
+/* 仅分类变更（增/删/改）：apisql 只做分类 diff，不动条目 */
+async function persistCats() {
+  const { store, mode } = getStore();
+  if (mode === "apisql") await store.syncCats(DB.cats);
+  else await persist();
 }
 
 /* ---------------- 导航 ---------------- */
@@ -267,7 +291,19 @@ function bindCards() {
   }));
   $$("[data-star]").forEach(b => b.addEventListener("click", async () => {
     const e = DB.entries.find(x => x.id === b.dataset.star);
-    e.fav = !e.fav; await persist(); renderView(); toast(e.fav ? "已加入收藏夹" : "已取消收藏");
+    if (!e || savingFav.has(e.id)) return;          // 防连点（同一条目保存中再点无效）
+    savingFav.add(e.id);
+    const old = e.fav;
+    e.fav = !e.fav; renderView(); toast(e.fav ? "已加入收藏夹" : "已取消收藏");  // UI 立即响应
+    try {
+      /* 只持久化这一条（apisql 单次 upsert；local 整包存但同步极快） */
+      await getStore().store.saveEntry(KEY, e, DB);
+    } catch (err) {
+      e.fav = old; renderView();                     // 失败回滚
+      toast("收藏保存失败：" + (err.message || "网络错误"));
+    } finally {
+      savingFav.delete(e.id);
+    }
   }));
   bindEntryBtns();
 }
@@ -314,12 +350,31 @@ function renderTrash() {
       : emptyHTML("回收站是空的", "删除的密码会暂时保存在此。")}`;
   bindEntryBtns(); bindPager();
   $$("[data-restore]").forEach(b => b.addEventListener("click", async () => {
-    DB.entries.find(x => x.id === b.dataset.restore).deleted = false;
-    await persist(); renderView(); toast("已恢复");
+    const e = DB.entries.find(x => x.id === b.dataset.restore);
+    if (!e || restoring.has(e.id)) return;
+    restoring.add(e.id);
+    e.deleted = false;
+    try { await persistEntry(e); renderView(); toast("已恢复"); }
+    catch (err) { e.deleted = true; renderView(); toast("恢复失败：" + (err.message || "网络错误")); }
+    finally { restoring.delete(e.id); }
   }));
   $$("[data-purge]").forEach(b => b.addEventListener("click", async () => {
-    DB.entries = DB.entries.filter(x => x.id !== b.dataset.purge);
-    await persist(); renderView(); toast("已永久删除");
+    const id = b.dataset.purge;
+    const e = DB.entries.find(x => x.id === id);
+    if (!e || purging.has(id)) return;
+    purging.add(id);
+    DB.entries = DB.entries.filter(x => x.id !== id);
+    try {
+      /* apisql：尽量物理删除线上行（需 entry_purge 接口）；local：整包已存 */
+      const { store, mode } = getStore();
+      if (mode === "apisql" && store.purgeEntry) {
+        try { await store.purgeEntry(KEY, id); }
+        catch (perr) { toast("本地已删除；线上清理失败（需在平台建 entry_purge 接口）"); }
+      } else await persist();
+      renderView(); toast("已永久删除");
+    } catch (err) {
+      DB.entries.push(e); renderView(); toast("删除失败：" + (err.message || "网络错误"));
+    } finally { purging.delete(id); }
   }));
 }
 
@@ -347,7 +402,7 @@ function renderCats() {
   $$("[data-del]").forEach(b => b.addEventListener("click", async () => {
     const c = b.dataset.del;
     if (DB.entries.some(e => !e.deleted && e.cat === c)) return toast("该分类下仍有条目，无法删除");
-    DB.cats = DB.cats.filter(x => x !== c); await persist(); renderView(); toast("已删除分类");
+    DB.cats = DB.cats.filter(x => x !== c); await persistCats(); renderView(); toast("已删除分类");
   }));
 }
 async function addCat() {
@@ -355,7 +410,7 @@ async function addCat() {
   if (!v) return;
   if (DB.cats.includes(v)) return toast("分类已存在");
   DB.cats.push(v);
-  await persist(); renderView(); toast("已添加分类");
+  await persistCats(); renderView(); toast("已添加分类");
 }
 async function startRename(c) {
   const item = $(`.cat-item[data-cat="${CSS.escape(c)}"]`);
@@ -369,8 +424,10 @@ async function startRename(c) {
     if (ok && v && v !== c) {
       const i = DB.cats.indexOf(c);
       if (i >= 0) DB.cats[i] = v;
-      DB.entries.forEach(e => { if (e.cat === c) e.cat = v; });
-      await persist(); toast("已重命名");
+      const affected = DB.entries.filter(e => e.cat === c);
+      affected.forEach(e => { e.cat = v; });
+      /* 只重存受影响的条目 + 分类 diff（cat_save 新名 + cat_delete 旧名） */
+      await persistEntries(affected); toast("已重命名");
     }
     renderView();
   };
@@ -430,7 +487,18 @@ function detailFootHTML(confirming) {
 function bindDetailFoot(e) {
   const foot = $("#mfoot");
   const doDelete = async () => {
-    e.deleted = true; e.fav = false; await persist(); closeModal(); renderView(); toast("已移入回收站");
+    const ok = $("#delOk"); if (!ok || ok.disabled) return;
+    ok.disabled = true; ok.classList.add("loading"); ok.textContent = "删除中…";
+    const oldFav = e.fav;
+    e.deleted = true; e.fav = false;
+    try {
+      await persistEntry(e);
+      closeModal(); renderView(); toast("已移入回收站");
+    } catch (err) {
+      e.deleted = false; e.fav = oldFav;   // 失败回滚
+      ok.disabled = false; ok.classList.remove("loading"); ok.textContent = "确认删除";
+      toast("删除失败：" + (err.message || "网络错误"));
+    }
   };
   $("#delBtn")?.addEventListener("click", () => {
     foot.classList.add("confirming");
@@ -499,6 +567,8 @@ function openForm(e) {
     $("#fPw").value = [...arr].map(n => s[n % s.length]).join("");
   });
   $("#saveBtn").addEventListener("click", async () => {
+    const btn = $("#saveBtn");
+    if (btn.disabled) return;               // 正在保存中，防重复点击
     const name = $("#fName").value.trim(), pw = $("#fPw").value;
     if (!name || !pw) return toast("名称和密码不能为空");
     const cat = $("#modal .dd .dd-val").textContent;
@@ -506,9 +576,22 @@ function openForm(e) {
       name, user: $("#fUser").value.trim(), pw, cat, url: $("#fUrl").value.trim(),
       note: $("#fNote").value.trim(), fav: $("#fFav").classList.contains("on")
     };
+    /* 先改内存，保存失败时回滚，避免内存与线上不一致 */
+    const old = isEdit ? { name: e.name, user: e.user, pw: e.pw, cat: e.cat, url: e.url, note: e.note, fav: e.fav } : null;
+    let newEntry = null;
     if (isEdit) Object.assign(e, fields);
-    else DB.entries.unshift({ id: crypto.randomUUID(), deleted: false, ...fields });
-    await persist(); closeModal(); renderView(); toast("已加密保存");
+    else { newEntry = { id: crypto.randomUUID(), deleted: false, ...fields }; DB.entries.unshift(newEntry); }
+    /* 进入 loading：禁用按钮 + 转圈 + 文案 */
+    btn.disabled = true; btn.classList.add("loading"); btn.textContent = "保存中…";
+    try {
+      await persistEntry(isEdit ? e : newEntry);
+      closeModal(); renderView(); toast("已加密保存");
+    } catch (err) {
+      if (newEntry) DB.entries = DB.entries.filter(x => x !== newEntry);
+      else if (old) Object.assign(e, old);
+      btn.disabled = false; btn.classList.remove("loading"); btn.textContent = "保存";
+      toast("保存失败：" + (err.message || "网络错误") + "，请重试");
+    }
   });
 }
 
@@ -540,7 +623,7 @@ document.addEventListener("click", e => {
     const name = input.value.trim();
     if (!name) { input.focus(); return; }
     if (DB.cats.includes(name)) { toast("分类已存在"); return; }
-    DB.cats.push(name); persist();
+    DB.cats.push(name); persistCats();
     box.outerHTML = dd(box.dataset.dd, DB.cats, name);
     toast("分类已添加"); return;
   }
