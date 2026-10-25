@@ -58,20 +58,27 @@ async function doSetup() {
 }
 
 async function doUnlock() {
+  const btn = $("#unlockBtn");
+  if (btn.disabled) return;                    // 防重复点击
   const pw = $("#master").value;
   if (!pw) return;
   const auth = JSON.parse(localStorage.getItem("vault.auth"));
   $("#err").classList.remove("show");
-  KEY = await VaultCrypto.verify(pw, auth.salt, auth.verifier);
-  if (!KEY) {
-    $("#err").classList.add("show");
+  /* 进入 loading：密钥派生（PBKDF2 31 万次迭代）+ 加载数据可能要 1~2 秒 */
+  btn.disabled = true; btn.classList.add("loading"); btn.textContent = "解锁中…";
+  try {
+    KEY = await VaultCrypto.verify(pw, auth.salt, auth.verifier);
+    if (!KEY) throw new Error("主密码不正确，请重试。");
+    const { store } = getStore();
+    DB = await store.load(KEY);
+  } catch (e) {
+    btn.disabled = false; btn.classList.remove("loading"); btn.textContent = "解 锁";
+    KEY = null;
+    $("#err").textContent = e.message; $("#err").classList.add("show");
     $("#unlockScr").classList.add("shake");
     setTimeout(() => $("#unlockScr").classList.remove("shake"), 420);
     return;
   }
-  const { store } = getStore();
-  try { DB = await store.load(KEY); }
-  catch (e) { $("#err").textContent = e.message; $("#err").classList.add("show"); KEY = null; return; }
   // 归一化 cats：兼容子分类版本遗留的对象格式，统一回退为扁平字符串数组
   DB.cats = (DB.cats || [])
     .map(c => typeof c === "string" ? c : (c && c.name) || "")
@@ -93,6 +100,10 @@ function lock() {
   const u = $("#unlockScr");
   u.classList.remove("gone"); u.style.display = "grid";
   $("#master").value = ""; $("#err").classList.remove("show");
+  u.classList.remove("shake");
+  /* 重置解锁按钮：上次解锁成功后按钮停留在「解锁中…」禁用态，不重置则锁定后再也无法点击 */
+  const b = $("#unlockBtn");
+  b.disabled = false; b.classList.remove("loading"); b.textContent = "解 锁";
 }
 $("#lockNow").addEventListener("click", lock);
 
@@ -272,17 +283,25 @@ function renderList(list, title, sub) {
       : emptyHTML("这里还没有内容", q ? "换个关键词试试。" : "点击右上角「新增条目」添加第一条密码。")}`;
   bindCards(); bindPager();
 }
+/* 卡片名称/网站行尾的内联元信息：分类小标签 + 备注
+ * 替代原卡片底部独立 meta 行——内容挪到名称和网站后面，卡片更矮 */
+function cardMetaLine(e) {
+  const tag = e.cat ? `<span class="itag" title="${escAttr(e.cat)}">${esc(e.cat)}</span>` : "";
+  const note = e.note ? `<span class="mn2" title="${escAttr(e.note)}">${esc(e.note)}</span>` : "";
+  if (!e.url && !tag && !note) return "";
+  const url = e.url ? `<span class="usr" data-cb="${escAttr(e.url)}" data-tip="已复制网址" title="点击复制">${esc(e.url)}</span>` : "";
+  return `<div class="sub2">${url}${tag}${note}</div>`;
+}
 function cardHTML(e) {
   return `<div class="card" data-id="${e.id}">
-    <div class="top">${favAvatar(e.name)}
-      <div><div class="nm">${esc(e.name)}</div>${e.url ? `<div class="usr" data-cb="${escAttr(e.url)}" data-tip="已复制网址" title="点击复制">${esc(e.url)}</div>` : ""}</div>
+    <div class="top">
+      <div class="ti"><div class="nm">${esc(e.name)}</div>${cardMetaLine(e)}</div>
       <button class="star ${e.fav ? "on" : ""}" data-star="${e.id}">${e.fav ? "★" : "☆"}</button></div>
     <div class="crow"><span class="cl">账号</span><span class="cv ${e.user ? "" : "ph"}">${e.user ? esc(e.user) : "未设置账号"}</span>${e.user ? `
       <button class="icbtn" data-cb="${escAttr(e.user)}" data-tip="已复制账号" title="复制账号">${I.copy}</button>` : ""}</div>
     <div class="crow"><span class="cl">密码</span><span class="cv mono" id="cpw-${e.id}">${cardMask(e.pw)}</span>
       <button class="icbtn" data-eye="${e.id}" title="显示/隐藏">${I.eye}</button>
-      <button class="icbtn" data-cb="${escAttr(e.pw)}" data-tip="已复制密码" title="复制密码">${I.copy}</button></div>
-    <div class="meta"><span class="tag">${esc(e.cat)}</span>${e.note ? `<span class="mn" title="${escAttr(e.note)}">${esc(e.note)}</span>` : ""}</div></div>`;
+      <button class="icbtn" data-cb="${escAttr(e.pw)}" data-tip="已复制密码" title="复制密码">${I.copy}</button></div></div>`;
 }
 function bindCards() {
   $$(".card").forEach(c => c.addEventListener("click", ev => {
@@ -320,22 +339,26 @@ function bindEntryBtns() {
   }));
   $$("[data-cb]").forEach(b => b.addEventListener("click", ev => {
     ev.stopPropagation();
-    navigator.clipboard?.writeText(b.dataset.cb); toast(b.dataset.tip || "已复制到剪贴板");
+    /* catch：无头环境/非 HTTPS 下剪贴板可能被拒，避免未捕获的 Promise 拒绝 */
+    navigator.clipboard?.writeText(b.dataset.cb).catch(() => {});
+    toast(b.dataset.tip || "已复制到剪贴板");
   }));
 }
-/* 回收站卡片：布局与保险库一致，右上角为「恢复」，meta 行带「永久删除」 */
+/* 回收站卡片：布局与保险库一致，右上角为「恢复」+「永久删除」 */
 function trashCardHTML(e) {
   return `<div class="card trash-card" data-id="${e.id}">
-    <div class="top">${favAvatar(e.name)}
-      <div><div class="nm">${esc(e.name)}</div>${e.url ? `<div class="usr" data-cb="${escAttr(e.url)}" data-tip="已复制网址" title="点击复制">${esc(e.url)}</div>` : ""}</div>
-      <button class="star restore" data-restore="${e.id}" title="恢复到保险库">${I.restore}</button></div>
+    <div class="top">
+      <div class="ti"><div class="nm">${esc(e.name)}</div>${cardMetaLine(e)}</div>
+      <div class="ops">
+        <button class="star restore" data-restore="${e.id}" title="恢复到保险库">${I.restore}</button>
+        <button class="icbtn purge" data-purge="${e.id}" title="永久删除">${I.trash}</button>
+      </div>
+    </div>
     <div class="crow"><span class="cl">账号</span><span class="cv ${e.user ? "" : "ph"}">${e.user ? esc(e.user) : "未设置账号"}</span>${e.user ? `
       <button class="icbtn" data-cb="${escAttr(e.user)}" data-tip="已复制账号" title="复制账号">${I.copy}</button>` : ""}</div>
     <div class="crow"><span class="cl">密码</span><span class="cv mono" id="cpw-${e.id}">${cardMask(e.pw)}</span>
       <button class="icbtn" data-eye="${e.id}" title="显示/隐藏">${I.eye}</button>
-      <button class="icbtn" data-cb="${escAttr(e.pw)}" data-tip="已复制密码" title="复制密码">${I.copy}</button></div>
-    <div class="meta"><span class="tag">${esc(e.cat)}</span>${e.note ? `<span class="mn" title="${escAttr(e.note)}">${esc(e.note)}</span>` : ""}
-      <button class="icbtn purge" data-purge="${e.id}" title="永久删除">${I.trash}</button></div></div>`;
+      <button class="icbtn" data-cb="${escAttr(e.pw)}" data-tip="已复制密码" title="复制密码">${I.copy}</button></div></div>`;
 }
 function renderTrash() {
   const list = DB.entries.filter(e => e.deleted);
