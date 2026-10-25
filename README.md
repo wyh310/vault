@@ -59,5 +59,5 @@ CREATE TABLE pv_cat (name VARCHAR(64) PRIMARY KEY, sort TINYINT DEFAULT 1);
 | 密钥派生 | PBKDF2-SHA256，310,000 次迭代，随机 16 字节盐 |
 | 校验器 | SHA-256(派生密钥)，单向，不可反推主密码 |
 | 条目数据 | AES-256-GCM 加密（随机 IV），密文落库 |
-| apiSQL 模式 | pw/note 等敏感列加密后写入，MySQL 中只有密文 |
+| apiSQL 模式 | 账号/密码加密后写入（合并密文存 pw 列，user 列只存占位符），MySQL 中无明文账号密码 |
 | 密钥与配置 | 不硬编码；apiSQL key 由部署环境注入 |
