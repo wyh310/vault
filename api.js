@@ -52,6 +52,40 @@ async function apiCall(cfg, iface, params = {}) {
   return rows;
 }
 
+/* ---------- 字段级加密（apisql 模式专用） ----------
+ * 账号/密码在前端用主密码派生的 AES-256-GCM 密钥加密后才发往接口，
+ * 数据库里只见密文：密文整体存 pw 列（TEXT），user 列只存占位符。
+ * 密文格式："v1:" + base64url(IV 12B ∥ 密文+认证Tag)
+ * 兼容旧数据：pw 列没有 v1: 前缀的行按老明文使用（load 时打 _legacy 标记），
+ *             下次保存该条目时自动转为密文——不需要手动迁移。
+ * -------------------------------------------------- */
+const ENC_PREFIX = "v1:";
+function u8B64url(bytes) {
+  let s = "";
+  for (const b of bytes) s += String.fromCharCode(b);
+  return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function b64urlU8(s) {
+  s = s.replace(/-/g, "+").replace(/_/g, "/");
+  while (s.length % 4) s += "=";
+  const b = atob(s), out = new Uint8Array(b.length);
+  for (let i = 0; i < b.length; i++) out[i] = b.charCodeAt(i);
+  return out;
+}
+async function encCreds(key, user, pw) {
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const pt = new TextEncoder().encode(JSON.stringify({ u: user || "", p: pw || "" }));
+  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, pt);
+  const all = new Uint8Array(iv.length + ct.byteLength);
+  all.set(iv); all.set(new Uint8Array(ct), iv.length);
+  return ENC_PREFIX + u8B64url(all);
+}
+async function decCreds(key, blob) {
+  const all = b64urlU8(blob.slice(ENC_PREFIX.length));
+  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv: all.slice(0, 12) }, key, all.slice(12));
+  return JSON.parse(new TextDecoder().decode(pt));
+}
+
 /* ---------- 本地加密存储（默认后端） ---------- */
 const LocalStore = {
   KEY: "vault.data",
@@ -88,8 +122,9 @@ const LocalStore = {
  *     fav TINYINT, deleted TINYINT DEFAULT 2, updated_at DATETIME
  *   );
  *   CREATE TABLE pv_cat (name VARCHAR(64) PRIMARY KEY, sort TINYINT DEFAULT 2);
- * 注意：pw / note 等敏感列在写入前已由前端 AES-GCM 加密，库里只见密文；
- *       主密码 verifier / salt 存 pv_meta（自建接口），不存明文。
+ * 注意：账号/密码由前端 AES-256-GCM 加密后才写入——密文整体存 pw 列（TEXT），
+ *       user 列只存占位符，数据库里没有任何明文账号密码；
+ *       主密码 verifier / salt 存 localStorage（vault.auth），从不入数据库。
  *       SQL 接口里避免使用值 0（apiSQL 会视为未提供），TINYINT 列传 1/2。
  *       apiSQL 以「单条预处理语句」执行接口 SQL，多语句会报 500 语法错误。
  *       datetime 列回读为 UTC ISO（如 2026-10-25T07:35:45.000Z），前端需本地化。
@@ -108,15 +143,31 @@ function createApisqlStore(cfg) {
   return {
     async load(key) {
       const rows = await apiCall(cfg, E.list);
+      const entries = [];
+      for (const r of rows) {
+        let user = r.user, pw = r.pw, legacy = false;
+        if (typeof r.pw === "string" && r.pw.startsWith(ENC_PREFIX)) {
+          try {
+            const c = await decCreds(key, r.pw);
+            user = c.u; pw = c.p;
+          } catch (err) {
+            throw new Error("条目「" + (r.name || r.id) + "」解密失败：数据库数据与当前主密码不匹配");
+          }
+        } else {
+          legacy = true;   // 旧版明文数据：先照常展示，由 app 层在解锁后自动转存为密文
+        }
+        entries.push({ ...r, user, pw, _legacy: legacy,
+          fav: r.fav === FAV_ON, deleted: r.deleted === DEL_YES, updated_at: toLocalDT(r.updated_at) });
+      }
       return {
-        entries: rows.map(r => ({ ...r, fav: r.fav === FAV_ON, deleted: r.deleted === DEL_YES, updated_at: toLocalDT(r.updated_at) })),
+        entries,
         cats: (await apiCall(cfg, E.cats)).map(r => r.name)
       };
     },
     async save(key, data) {
       for (const e of data.entries) {
         await apiCall(cfg, E.save, {
-          id: e.id, name: e.name, user: e.user, pw: e.pw, cat: e.cat,
+          id: e.id, name: e.name, user: " ", pw: await encCreds(key, e.user, e.pw), cat: e.cat,
           note: e.note || " ", url: e.url || " ",
           fav: e.fav ? FAV_ON : FAV_OFF, deleted: e.deleted ? DEL_YES : DEL_NO,
           updated_at: new Date().toISOString().slice(0, 19).replace("T", " ")
@@ -124,10 +175,10 @@ function createApisqlStore(cfg) {
       }
       await this.syncCats(data.cats);
     },
-    /* 单条保存：只发一次 entry_save（upsert），避免全量重存导致交互卡顿 */
+    /* 单条保存：只发一次 entry_save（upsert），账号/密码加密为密文后写入 */
     async saveEntry(key, e) {
       await apiCall(cfg, E.save, {
-        id: e.id, name: e.name, user: e.user, pw: e.pw, cat: e.cat,
+        id: e.id, name: e.name, user: " ", pw: await encCreds(key, e.user, e.pw), cat: e.cat,
         note: e.note || " ", url: e.url || " ",
         fav: e.fav ? FAV_ON : FAV_OFF, deleted: e.deleted ? DEL_YES : DEL_NO,
         updated_at: new Date().toISOString().slice(0, 19).replace("T", " ")
