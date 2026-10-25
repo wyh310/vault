@@ -14,6 +14,9 @@
  *  proxy 模式（推荐，Cloudflare Pages 部署）：同源请求 /proxy/<接口>，
  *    由 Pages Function 服务端附加 Bearer 密钥——密钥只放在 Pages 环境变量，不进前端。
  *  直连模式：浏览器直接打 apiSQL，密钥在前端 cfg.key（有暴露风险，且需平台放行 CORS）。
+ *
+ * 容错原则：任何异常（网络失败 / HTTP 非 2xx / 非 JSON / 缺 rows）都必须**显式抛错**，
+ * 绝不能静默返回空数组——否则会出现「提示保存成功、刷新后数据没了」的假象。
  * ------------------------------------------------------------ */
 async function apiCall(cfg, iface, params = {}) {
   const headers = { "Accept": "application/json" };
@@ -28,10 +31,25 @@ async function apiCall(cfg, iface, params = {}) {
     headers["Authorization"] = "Bearer " + cfg.key;
   }
   q.forEach(([k, v]) => url.searchParams.set("params[" + k + "]", v));
-  const res = await fetch(url, { method: "GET", headers });
-  const data = await res.json().catch(() => ({}));
+  let res;
+  try {
+    res = await fetch(url, { method: "GET", headers });
+  } catch (e) {
+    throw new Error("网络请求失败（" + iface + "）");
+  }
+  if (!res.ok) {
+    throw new Error("接口 " + iface + " 返回 HTTP " + res.status +
+      (cfg.proxy ? "（代理未生效？请确认 Pages 部署包含 functions 目录、环境变量已配置）" : ""));
+  }
+  const data = await res.json().catch(() => null);
+  if (!data || typeof data !== "object") {
+    throw new Error("接口 " + iface + " 返回了非 JSON 内容" +
+      (cfg.proxy ? "（代理未生效？返回的可能不是 Pages Function 的响应）" : ""));
+  }
   if (data.code && data.code !== "OK" && data.code !== "SUCCESS") throw new Error(data.message || data.code);
-  return data.rows || data.data || [];
+  const rows = data.rows || data.data;
+  if (!Array.isArray(rows)) throw new Error("接口 " + iface + " 响应缺少 rows 字段");
+  return rows;
 }
 
 /* ---------- 本地加密存储（默认后端） ---------- */
@@ -52,7 +70,14 @@ const LocalStore = {
   async save(key, data) {
     const box = await VaultCrypto.encryptObj(key, data);
     localStorage.setItem(this.KEY, JSON.stringify(box));
-  }
+  },
+
+  /* 单条保存：local 整包存（同步、极快），第二个参数忽略 */
+  async saveEntry(key, entry, allData) {
+    return this.save(key, allData);
+  },
+
+  async syncCats() { /* local 无分类表，整包已含 */ }
 };
 
 /* ---------- apiSQL 后端（接口建好后切换 config.mode = "apisql" 即用） ----------
@@ -97,15 +122,31 @@ function createApisqlStore(cfg) {
           updated_at: new Date().toISOString().slice(0, 19).replace("T", " ")
         });
       }
-      /* 分类同步（cat_save 只能是单语句 upsert，重命名/删除由前端 diff 完成）：
-         本地有、线上没有 → cat_save 新增；线上有、本地没有 → cat_delete 清理旧名 */
+      await this.syncCats(data.cats);
+    },
+    /* 单条保存：只发一次 entry_save（upsert），避免全量重存导致交互卡顿 */
+    async saveEntry(key, e) {
+      await apiCall(cfg, E.save, {
+        id: e.id, name: e.name, user: e.user, pw: e.pw, cat: e.cat,
+        note: e.note || " ", url: e.url || " ",
+        fav: e.fav ? FAV_ON : FAV_OFF, deleted: e.deleted ? DEL_YES : DEL_NO,
+        updated_at: new Date().toISOString().slice(0, 19).replace("T", " ")
+      });
+    },
+    /* 分类 diff 同步：本地有、线上没有 → cat_save 新增；线上有、本地没有 → cat_delete 清理 */
+    async syncCats(cats) {
       const remote = (await apiCall(cfg, E.cats)).map(r => r.name);
-      for (const c of data.cats) {
+      for (const c of cats) {
         if (!remote.includes(c)) await apiCall(cfg, E.catSave, { name: c });
       }
       for (const c of remote) {
-        if (!data.cats.includes(c)) await apiCall(cfg, E.catDel, { name: c });
+        if (!cats.includes(c)) await apiCall(cfg, E.catDel, { name: c });
       }
+    },
+    /* 物理删除（需平台建 entry_purge 接口；未建则抛错由调用方降级处理） */
+    async purgeEntry(key, id) {
+      if (!E.purge) throw new Error("未配置 entry_purge 接口");
+      await apiCall(cfg, E.purge, { id });
     }
   };
 }
