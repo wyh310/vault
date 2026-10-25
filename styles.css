@@ -89,7 +89,8 @@ input,select,textarea{font-family:inherit}
 .card .top{display:flex;align-items:center;gap:12px;margin-bottom:13px}
 .fav{width:40px;height:40px;flex:none;border-radius:10px;display:grid;place-items:center;font-weight:700;font-size:16px;border:1px solid var(--line);background:var(--card-2);color:var(--text)}
 .card .nm{font-weight:600;font-size:15px}
-.card .usr{font-size:12.5px;color:var(--faint);margin-top:2px;cursor:pointer}
+.card .ti{flex:1;min-width:0}
+.card .usr{font-size:12.5px;color:var(--faint);margin-top:0;cursor:pointer}
 .card,button,.crow{-webkit-tap-highlight-color:transparent;-webkit-touch-callout:none}
 .card *{-webkit-tap-highlight-color:transparent}
 .card .usr:hover{text-decoration:underline;text-underline-offset:3px}
@@ -103,10 +104,17 @@ input,select,textarea{font-family:inherit}
 .crow .icbtn{padding:5px}
 .crow .icbtn.on{color:var(--text)}
 .crow .icbtn svg{width:14px;height:14px}
-.card .meta{display:flex;align-items:center;gap:8px;margin-top:13px;font-size:11.5px;color:var(--faint);min-width:0}
-.card .meta .tag{flex:none;width:76px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.card .mn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tag{padding:3px 10px;border-radius:999px;background:var(--card-2);border:1px solid var(--line);color:var(--muted);font-size:12px}
+/* 卡片名称/网站行尾的内联元信息（分类小标签 + 备注，替代原底部 meta 行） */
+.card .sub2{display:flex;align-items:center;gap:6px;margin-top:3px;min-width:0}
+.card .itag{flex:none;max-width:76px;padding:0 8px;border-radius:999px;background:var(--card-2);border:1px solid var(--line);color:var(--muted);font-size:11px;line-height:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .mn2{flex:1;min-width:0;font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 回收站卡片右上角操作组（恢复 + 永久删除） */
+.card .top .ops{margin-left:auto;display:flex;align-items:center;gap:2px;flex:none}
+.card .top .ops .star{margin-left:0}
+.card .top .ops .icbtn{padding:5px;color:var(--faint);border-radius:8px;transition:.2s}
+.card .top .ops .icbtn svg{width:15px;height:15px;display:block}
+.card .top .ops .icbtn:hover{color:var(--text)}
+.card .top .ops .icbtn.purge:hover{color:#c0392b}
 .star{margin-left:auto;flex:none;color:var(--faint);font-size:18px;line-height:1;background:none;border:none;cursor:pointer;padding:4px;border-radius:8px;transition:color .2s,transform .1s}
 .star:hover{color:var(--muted)}
 .star:active{transform:scale(1.18)}
@@ -114,10 +122,6 @@ input,select,textarea{font-family:inherit}
 .star.on:hover{color:#d18a24}
 .star svg{width:17px;height:17px;display:block}
 .star.restore:hover{color:var(--text)}
-.card .meta .icbtn{margin-left:auto;padding:5px;color:var(--faint);border-radius:7px;transition:.2s}
-.card .meta .icbtn svg{width:14px;height:14px;display:block}
-.card .meta .icbtn:hover{color:var(--text)}
-.card .meta .icbtn.purge:hover{color:#c0392b}
 
 .empty{border:1.5px dashed var(--line);border-radius:14px;padding:56px 30px;text-align:center;color:var(--muted);background:rgba(255,255,255,.6)}
 .empty svg{width:40px;height:40px;color:var(--faint);margin-bottom:12px}
@@ -163,6 +167,8 @@ input,select,textarea{font-family:inherit}
 .unlock-btn{width:100%;height:48px;border-radius:10px;background:var(--primary);color:#fff;font-weight:600;font-size:14.5px;transition:.25s var(--ease)}
 .unlock-btn:hover{opacity:.85}
 .unlock-btn:active{transform:scale(.985)}
+.unlock-btn.loading{opacity:.75;pointer-events:none}
+.unlock-btn.loading::before{content:"";display:inline-block;width:15px;height:15px;margin-right:8px;vertical-align:-2px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:vspin .7s linear infinite}
 .unlock.shake .lock-card{animation:shake .4s var(--ease)}
 @keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-9px)}40%,80%{transform:translateX(9px)}}
 .hint{margin-top:18px;font-size:12px;color:var(--faint)}
