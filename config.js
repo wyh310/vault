@@ -21,8 +21,10 @@ window.VAULT_CONFIG = {
     key: "",             // Bearer API_KEY —— 建议走 proxy，勿提交仓库
     endpoints: {
       list:   "entry_list",     // GET  返回 rows: [{id,name,user,pw,cat,note,url,fav,deleted,updated_at}]
-      save:   "entry_save",     // GET  params: 加密后的字段
-      delete: "entry_delete",   // GET  params: {id}
+      save:   "entry_save",     // GET  params: 加密后的字段（upsert）
+      delete: "entry_delete",   // GET  params: {id}（软删除 deleted=1）
+      restore:"entry_restore",  // GET  params: {id}（恢复 deleted=2）
+      purge:  "entry_purge",    // GET  params: {id}（物理删除；平台未建此接口则永久删除仅本地生效）
       cats:   "cat_list",       // GET  返回 rows: [{name}]
       catSave:"cat_save",       // GET  params: {name}（单语句 upsert；重命名由前端 diff：cat_delete 旧名 + cat_save 新名）
       catDel: "cat_delete"      // GET  params: {name}
