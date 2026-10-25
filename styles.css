@@ -106,7 +106,7 @@ input,select,textarea{font-family:inherit}
 .crow .icbtn svg{width:14px;height:14px}
 /* 卡片名称/网站行尾的内联元信息（分类小标签 + 备注，替代原底部 meta 行） */
 .card .sub2{display:flex;align-items:center;gap:6px;margin-top:3px;min-width:0}
-.card .itag{flex:none;max-width:76px;padding:0 8px;border-radius:999px;background:var(--card-2);border:1px solid var(--line);color:var(--muted);font-size:11px;line-height:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card .itag{flex:none;max-width:76px;margin-left:6px;padding:0 8px;border-radius:999px;background:var(--card-2);border:1px solid var(--line);color:var(--muted);font-size:11px;line-height:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .card .mn2{flex:1;min-width:0;font-size:11.5px;color:var(--faint);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* 回收站卡片右上角操作组（恢复 + 永久删除） */
 .card .top .ops{margin-left:auto;display:flex;align-items:center;gap:2px;flex:none}
