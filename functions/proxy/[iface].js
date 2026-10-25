@@ -10,7 +10,7 @@ export async function onRequest(context) {
   const iface = String(params.iface || "");
 
   // 只允许白名单内的接口名，防止被当成开放代理滥用
-  const ALLOWED = ["entry_list", "entry_save", "entry_delete", "entry_restore",
+  const ALLOWED = ["entry_list", "entry_save", "entry_delete", "entry_restore", "entry_purge",
                    "cat_list", "cat_save", "cat_delete"];
   if (!ALLOWED.includes(iface)) {
     return new Response(JSON.stringify({ code: "IFACE_NOT_ALLOWED", message: "接口不在白名单: " + iface }), {
