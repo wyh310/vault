@@ -4,8 +4,8 @@
 > **API 密钥放在 Cloudflare 环境变量里，不进仓库、不进前端代码**。
 >
 > 本方案适合**本地没有 git** 的情况：全程网页操作，不用一行命令行。
-> 主推 **方式一：Workers Builds 导入 Git 仓库**（`worker.js` 同时托管静态文件和 `/proxy` 代理，
-> 推送即自动部署）；Pages 直接上传为备选。
+> 主推 **方式一：Pages 连接 GitHub 仓库**（「导入现有 Git 存储库」实际落地为 Pages 项目，
+> `functions/` 代理生效，推送即自动部署）；不上 GitHub 时用方式二手动上传。
 
 ---
 
@@ -14,24 +14,24 @@
 | 项 | 状态 |
 |---|---|
 | apiSQL 8 个接口 | ✅ 全部实测通过（18/18） |
-| `worker.js`（Worker 二合一：静态资源 + `/proxy` 代理） | ✅ 已写好，已推仓库 |
-| `wrangler.toml`（声明入口 `worker.js` + 静态目录） | ✅ 已写好，已推仓库 |
-| `functions/proxy/[iface].js`（Pages 备选用） | ✅ 已写好 |
+| `functions/proxy/[iface].js`（Pages 代理函数，8 接口白名单） | ✅ 已写好，已推仓库 |
 | `api.js` 代理模式 | ✅ 已支持（`config.js` 填 `proxy: "/proxy"` 即用） |
+| `worker.js` + `wrangler.toml`（Worker 备选方案） | ✅ 已写好，已推仓库 |
 | apiSQL 接口 IP 白名单 | ⚠️ **不要开**（开了会拦 Cloudflare 出口 IP，见文末注意事项） |
 
 ---
 
 ## 一、方式一（推荐）：Workers Builds · 导入现有 Git 存储库（全自动）
 
-> 2026-10-25 定的主方案。Cloudflare「创建 Worker」页面有两个选项：
-> **「导入现有 Git 存储库」和「拖放文件」——选前者**。
-> 「拖放文件」是 assets-only 上传（页面自述"上传站点的资产"），`worker.js` 会被当成
-> 普通静态文件传上去、**从不作为脚本执行**，`/proxy/*` 永远 404（已实测踩坑，见文末「最终定论」）。
+## 一、方式一（推荐）：Pages 连接 GitHub 仓库（Git 导入，全自动）
 
-前提（已就绪）：仓库 `wyh310/vault` 里已有 `worker.js` + `wrangler.toml`。
-`wrangler.toml` 声明入口 `main = "worker.js"` 与静态目录 `[assets] directory = "./"`，
-Workers Builds 靠它自动部署；`upload_github.py` 会随代码一起推送这两个文件。
+> 2026-10-25 实测走通的主方案。Cloudflare「创建 Worker」页面选 **「导入现有 Git 存储库」**
+> （**别选「拖放文件」**——那是 assets-only 上传，脚本不执行，已实测死路，见文末「最终定论」）。
+> 实测该流程落地为 **Pages 项目**（域名 `xxx.pages.dev`），`functions/` 目录生效，
+> `/proxy/*` 由 Pages Functions 代理——这正是我们要的。
+
+前提（已就绪）：仓库 `wyh310/vault` 里已有 `functions/proxy/[iface].js`（代理函数）。
+`upload_github.py` 会随代码一起推送它；仓库里的 `worker.js`/`wrangler.toml` 是 Worker 备选方案，Pages 路线用不到但无害。
 
 ### 第 1 步：开始导入
 
@@ -42,47 +42,48 @@ Workers & Pages → **Create** → 「创建 Worker」页面 → 点 **「导入
 1. 弹出 GitHub 授权页 → 授权 Cloudflare（建议 Only select repositories → 只选 `vault` 仓库）；
 2. 选中 `wyh310/vault` → **Begin setup**。
 
-### 第 3 步：构建设置
+### 第 3 步：构建设置（全部保持默认）
 
 | 配置项 | 值 |
 |---|---|
-| Root directory | **留空**（文件在仓库根目录） |
-| Build command | **留空** |
-| Deploy command | `npx wrangler deploy`（页面没自动识别就手填这条） |
+| 框架预设 | **无** |
+| 构建命令 | **留空** |
+| 构建输出目录 | **`/`**（文件在仓库根目录） |
 
-点部署，等 1~2 分钟。Worker 名字取 `wrangler.toml` 里的 `name`（当前为 `vault`）。
+点 **保存并部署**，等 1~2 分钟。项目名可能被自动加随机后缀（如 `vault-7ft`，因为 `vault`
+被旧 Worker 占用了）——正常现象，不影响使用。
 
-### 第 4 步：配 API 密钥
+### 第 4 步：配 API 密钥（不做会报 500 `NO_KEY`）
 
-Worker → **Settings → 变量和机密** → 添加：
+Pages 项目 → **Settings → Environment variables → Add variable**：
 
 | 字段 | 值 |
 |---|---|
 | Variable name | `VAULT_API_KEY` |
 | Value | `sk-af8740236c657974ec561c4f0363ac42` |
-| 类型 | **加密** |
+| Environment | **Production**（建议同时勾 Preview） |
 
-保存后到 **Deployments → 最新部署 → Redeploy**（密钥要部署后才生效）。
+保存后到 **Deployments → 最新部署右侧 ⋯ → Retry deploy**（环境变量必须重新部署才生效）。
 
-### 第 5 步：验证代理（先不碰域名）
+### 第 5 步：验证代理
 
-打开新 Worker 的 `https://<项目名>.workers.dev/proxy/entry_list`：
+打开 `https://<项目名>.pages.dev/proxy/entry_list`：
 
-- 返回 JSON（`{"code":"OK",...}` 或缺参数的业务报错）→ **通了**，继续第 6 步；
-- 还是 **404** → 部署里没带上脚本：看 Deployments 是否构建成功、仓库里 `worker.js`/`wrangler.toml` 在不在；
-- **500 `NO_KEY`** → 第 4 步没做或没重新部署。
+- 返回 JSON（`{"code":"OK",...}` 或缺参数的业务报错）→ **通了**；
+- **500 `NO_KEY`** → 第 4 步没做或没 Retry deploy；
+- **404** → `functions/` 没进部署：确认仓库根目录有 `functions/proxy/[iface].js`。
 
 ### 第 6 步：搬域名（第 5 步通过后再做）
 
-1. 旧 assets-only Worker → Settings → 域和路由 → 把 `wyh.weternal.cc.cd` **移除**；
-2. 新 Worker → Settings → 域和路由/Triggers → **Custom Domains** → 添加 `wyh.weternal.cc.cd`；
-3. 等几分钟生效，开 `https://wyh.weternal.cc.cd` 输主密码解锁。
+1. 旧 assets-only Worker → Settings → 域和路由 → 把要用的域名**移除**；
+2. 本 Pages 项目 → **Custom domains → Set up a domain** → 添加域名（如 `wyh.weternal.cc.cd`）；
+3. 等几分钟生效。
 
-> 如果 `wrangler.toml` 的 `name` 与旧 Worker 同名，这次部署会直接覆盖旧 Worker，域名绑定不变，可跳过第 6 步。
+> **全程不要先删旧 Worker**——域名绑定会跟着丢（Error 1016 / NXDOMAIN 就是这么来的）。
 
 ### 以后更新（全自动，不用再回 Cloudflare）
 
-改本地 `vault-app/` 里的文件 → 跑 `upload_github.py` 推送 → Workers Builds **自动重新部署**（约 1 分钟）。
+改本地 `vault-app/` 里的文件 → 跑 `upload_github.py` 推送 → Pages **自动重新部署**（约 1 分钟）。
 既不用手动传文件，也不会再出现「每次更新后 `/proxy/*` 404」。
 
 ---
@@ -142,9 +143,9 @@ Worker → **Settings → 变量和机密** → 添加：
 `https://<域名>/worker.js` 下载验证），**从不作为脚本执行**，且该页面没有「编辑代码」入口。
 此流程下 `/proxy/*` 永远 404，换多少次文件都没用。
 
-**正解：换成会执行脚本的部署方式**（二选一）：
-- **方式一（推荐）**：Workers Builds 导入 Git 仓库——「创建 Worker」页面选**「导入现有 Git 存储库」**，
-  仓库已含 `worker.js` + `wrangler.toml`，推送即自动部署，从此不用手动传文件；
+**正解：换成会执行脚本的部署方式**（2026-10-25 已按方式一跑通）：
+- **方式一（推荐，已采用）**：「创建 Worker」页面选**「导入现有 Git 存储库」**——实测落地为
+  **Pages 项目**（`functions/` 生效，`/proxy/*` 由 Pages Functions 代理），推送即自动部署；
 - **方式二**：Pages 直接上传（拖拽流程一样，但 Pages 认 `functions/` 目录）。
 
 共同底线：**全程不要先删还在跑着域名的 Worker**——域名绑定会跟着丢（Error 1016 / NXDOMAIN 就是这么来的）。
