@@ -114,6 +114,14 @@ const LocalStore = {
   async syncCats() { /* local 无分类表，整包已含 */ }
 };
 
+/* ---------- 多端共享盐（仅 apisql 用） ----------
+ * salt/verifier 存 DB 的 pv_meta 表（id=1），所有端/网址共用同一套盐，
+ * 这样只要主密码一致，各端派生出的密钥就一致，MySQL 里的密文互相可解。
+ * local 模式无此概念，返回 null / 空操作。
+ */
+LocalStore.getMeta = async () => null;
+LocalStore.saveMeta = async () => {};
+
 /* ---------- apiSQL 后端（接口建好后切换 config.mode = "apisql" 即用） ----------
  * MySQL 建表参考：
  *   CREATE TABLE pv_entry (
@@ -202,6 +210,17 @@ function createApisqlStore(cfg) {
     async purgeEntry(key, id) {
       if (!E.purge) throw new Error("未配置 entry_purge 接口");
       await apiCall(cfg, E.purge, { id });
+    },
+    /* 读取共享盐：无行返回 null（尚未初始化） */
+    async getMeta() {
+      const rows = await apiCall(cfg, E.metaGet);
+      if (!rows.length) return null;
+      const r = rows[0];
+      return r.salt && r.verifier ? { salt: r.salt, verifier: r.verifier } : null;
+    },
+    /* 写入共享盐（幂等，id 固定 1） */
+    async saveMeta(salt, verifier) {
+      await apiCall(cfg, E.metaSave, { id: 1, salt, verifier });
     }
   };
 }
