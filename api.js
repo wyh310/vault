@@ -144,6 +144,7 @@ function createApisqlStore(cfg) {
     async load(key) {
       const rows = await apiCall(cfg, E.list);
       const entries = [];
+      let broken = 0;
       for (const r of rows) {
         let user = r.user, pw = r.pw, legacy = false;
         if (typeof r.pw === "string" && r.pw.startsWith(ENC_PREFIX)) {
@@ -151,7 +152,9 @@ function createApisqlStore(cfg) {
             const c = await decCreds(key, r.pw);
             user = c.u; pw = c.p;
           } catch (err) {
-            throw new Error("条目「" + (r.name || r.id) + "」解密失败：数据库数据与当前主密码不匹配");
+            /* 密文与当前密钥不匹配（如换浏览器/重置后遗留的旧密文）：
+               跳过该条而不是让整库加载失败，稍后提示用户清理 */
+            broken++; continue;
           }
         } else {
           legacy = true;   // 旧版明文数据：先照常展示，由 app 层在解锁后自动转存为密文
@@ -159,6 +162,7 @@ function createApisqlStore(cfg) {
         entries.push({ ...r, user, pw, _legacy: legacy,
           fav: r.fav === FAV_ON, deleted: r.deleted === DEL_YES, updated_at: toLocalDT(r.updated_at) });
       }
+      if (broken) setTimeout(() => toast(`有 ${broken} 条数据与当前主密码不匹配，已跳过（旧密文无法解密，可在数据库中清理）`), 600);
       return {
         entries,
         cats: (await apiCall(cfg, E.cats)).map(r => r.name)
