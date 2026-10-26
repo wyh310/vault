@@ -27,7 +27,9 @@ window.VAULT_CONFIG = {
       purge:  "entry_purge",    // GET  params: {id}（物理删除；平台未建此接口则永久删除仅本地生效）
       cats:   "cat_list",       // GET  返回 rows: [{name}]
       catSave:"cat_save",       // GET  params: {name}（单语句 upsert；重命名由前端 diff：cat_delete 旧名 + cat_save 新名）
-      catDel: "cat_delete"      // GET  params: {name}
+      catDel: "cat_delete",
+      metaGet:"meta_get",      // GET  返回 rows: [{salt,verifier}]（多端共享盐；无行=尚未初始化）
+      metaSave:"meta_save"     // GET  params: {salt, verifier}（单语句 upsert，id 固定 1）      // GET  params: {name}
     }
   }
 };
