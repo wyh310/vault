@@ -118,6 +118,17 @@ input,select,textarea{font-family:inherit}
 .star{margin-left:auto;flex:none;color:var(--faint);font-size:18px;line-height:1;background:none;border:none;cursor:pointer;padding:4px;border-radius:8px;transition:color .2s,transform .1s}
 .star:hover{color:var(--muted)}
 .star:active{transform:scale(1.18)}
+/* 收起 / 展开：默认只显示名称+分类+网址，点卡片展开账号密码 */
+.card .top{margin-bottom:0}
+.card .body{max-height:0;overflow:hidden;opacity:0;transition:max-height .35s var(--ease),opacity .3s var(--ease),margin-top .35s var(--ease)}
+.card.open .body{opacity:1;margin-top:10px}
+.card .top .ops .pen{padding:5px;color:var(--faint);border-radius:8px;transition:.2s}
+.card .top .ops .pen svg{width:15px;height:15px;display:block}
+.card .top .ops .pen:hover{color:var(--text)}
+.card .chev{margin-left:auto;flex:none;color:var(--faint);padding:5px;border-radius:8px;transition:transform .3s var(--ease),color .2s}
+.card .chev svg{width:16px;height:16px;display:block}
+.card .chev:hover{color:var(--text)}
+.card.open .chev{transform:rotate(180deg)}
 .star.on{color:#e8a33d}
 .star.on:hover{color:#d18a24}
 .star svg{width:17px;height:17px;display:block}
