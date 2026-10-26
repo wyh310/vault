@@ -11,7 +11,8 @@ export async function onRequest(context) {
 
   // 只允许白名单内的接口名，防止被当成开放代理滥用
   const ALLOWED = ["entry_list", "entry_save", "entry_delete", "entry_restore", "entry_purge",
-                   "cat_list", "cat_save", "cat_delete"];
+                   "cat_list", "cat_save", "cat_delete",
+                   "meta_get", "meta_save"];
   if (!ALLOWED.includes(iface)) {
     return new Response(JSON.stringify({ code: "IFACE_NOT_ALLOWED", message: "接口不在白名单: " + iface }), {
       status: 403, headers: { "Content-Type": "application/json" }
