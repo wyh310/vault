@@ -355,9 +355,21 @@ input,select,textarea{font-family:inherit}
   .content{padding:14px 16px 28px}
   .grid{grid-template-columns:1fr}
   .modal{width:calc(100vw - 20px);max-height:calc(100vh - 32px)}
-  .mb{padding:16px}
-  .mfoot{padding:12px 16px}
-  .mfoot button{height:42px}
+  /* 手机端弹窗紧凑化：头部/表单/间距全面收紧 */
+  .mh{padding:14px 16px;gap:10px}
+  .mh .fav{width:36px;height:36px;font-size:14px}
+  .mh .t{font-size:15px}
+  .mh .x{padding:5px}
+  .mh.dark{padding:14px 16px}
+  .mb{padding:14px 16px;gap:10px}
+  .fld{gap:4px;margin-bottom:0}
+  .fld input,.fld textarea{padding:9px 11px;font-size:13.5px}
+  .fld textarea{min-height:52px}
+  .fld.pw-wrap .gen{top:26px}
+  .dd-trigger{padding:9px 11px}
+  .toggle-row{padding:8px 0}
+  .mfoot{padding:10px 16px;gap:8px}
+  .mfoot button{height:40px}
   .cf-menu{width:180px}
   .cat-add,.cat-list,.set-list,.about{max-width:100%}
   .cat-add{flex-wrap:wrap}
