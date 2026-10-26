@@ -308,17 +308,32 @@ function cardHTML(e) {
   return `<div class="card" data-id="${e.id}">
     <div class="top">
       <div class="ti">${cardTitleLine(e)}${cardSubLine(e)}</div>
-      <button class="star ${e.fav ? "on" : ""}" data-star="${e.id}">${e.fav ? "★" : "☆"}</button></div>
+      <div class="ops">
+        <button class="pen" data-edit="${e.id}" title="详情 / 编辑">${I.pen}</button>
+        <button class="star ${e.fav ? "on" : ""}" data-star="${e.id}">${e.fav ? "★" : "☆"}</button>
+        <button class="chev" data-toggle title="展开 / 收起">${I.chevD}</button>
+      </div>
+    </div>
+    <div class="body">
     <div class="crow"><span class="cl">账号</span><span class="cv ${e.user ? "" : "ph"}">${e.user ? esc(e.user) : "未设置账号"}</span>${e.user ? `
       <button class="icbtn" data-cb="${escAttr(e.user)}" data-tip="已复制账号" title="复制账号">${I.copy}</button>` : ""}</div>
     <div class="crow"><span class="cl">密码</span><span class="cv mono" id="cpw-${e.id}">${cardMask(e.pw)}</span>
       <button class="icbtn" data-eye="${e.id}" title="显示/隐藏">${I.eye}</button>
-      <button class="icbtn" data-cb="${escAttr(e.pw)}" data-tip="已复制密码" title="复制密码">${I.copy}</button></div></div>`;
+      <button class="icbtn" data-cb="${escAttr(e.pw)}" data-tip="已复制密码" title="复制密码">${I.copy}</button></div>
+    </div></div>`;
 }
 function bindCards() {
   $$(".card").forEach(c => c.addEventListener("click", ev => {
-    if (ev.target.closest("[data-star]") || ev.target.closest(".icbtn") || ev.target.closest(".usr")) return;
-    openDetail(c.dataset.id);
+    /* 点击账号/密码按钮、收藏、详情、回收站操作 → 不触发展开；其余点击卡片 → 展开/收起 */
+    if (ev.target.closest(".icbtn") || ev.target.closest(".usr") ||
+        ev.target.closest("[data-star]") || ev.target.closest(".pen") ||
+        ev.target.closest("[data-restore]") || ev.target.closest("[data-purge]") ||
+        ev.target.closest("[data-edit]")) return;
+    c.classList.toggle("open");
+  }));
+  $$("[data-edit]").forEach(b => b.addEventListener("click", ev => {
+    ev.stopPropagation();
+    openDetail(b.dataset.edit);
   }));
   $$("[data-star]").forEach(b => b.addEventListener("click", async () => {
     const e = DB.entries.find(x => x.id === b.dataset.star);
@@ -364,13 +379,16 @@ function trashCardHTML(e) {
       <div class="ops">
         <button class="star restore" data-restore="${e.id}" title="恢复到保险库">${I.restore}</button>
         <button class="icbtn purge" data-purge="${e.id}" title="永久删除">${I.trash}</button>
+        <button class="chev" data-toggle title="展开 / 收起">${I.chevD}</button>
       </div>
     </div>
+    <div class="body">
     <div class="crow"><span class="cl">账号</span><span class="cv ${e.user ? "" : "ph"}">${e.user ? esc(e.user) : "未设置账号"}</span>${e.user ? `
       <button class="icbtn" data-cb="${escAttr(e.user)}" data-tip="已复制账号" title="复制账号">${I.copy}</button>` : ""}</div>
     <div class="crow"><span class="cl">密码</span><span class="cv mono" id="cpw-${e.id}">${cardMask(e.pw)}</span>
       <button class="icbtn" data-eye="${e.id}" title="显示/隐藏">${I.eye}</button>
-      <button class="icbtn" data-cb="${escAttr(e.pw)}" data-tip="已复制密码" title="复制密码">${I.copy}</button></div></div>`;
+      <button class="icbtn" data-cb="${escAttr(e.pw)}" data-tip="已复制密码" title="复制密码">${I.copy}</button></div>
+    </div></div>`;
 }
 function renderTrash() {
   const list = DB.entries.filter(e => e.deleted);
@@ -690,7 +708,9 @@ const I = {
   link: `<svg class="vic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M10 14a5 5 0 0 0 7.5.5l2-2a5 5 0 0 0-7-7l-1.2 1.1M14 10a5 5 0 0 0-7.5-.5l-2 2a5 5 0 0 0 7 7l1.2-1.1"/></svg>`,
   tag: `<svg class="vic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 11V4a1 1 0 0 1 1-1h7l10 10-8 8L3 11Z"/><circle cx="8" cy="8" r="1.4"/></svg>`,
   chevL: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 6-6 6 6 6"/></svg>`,
-  chevR: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>`
+  chevR: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 6 6 6-6 6"/></svg>`,
+  chevD: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>`,
+  pen: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>`
 };
 function esc(s) { return String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 const escAttr = esc;
