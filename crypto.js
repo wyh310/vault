@@ -56,5 +56,11 @@ const VaultCrypto = (() => {
     return JSON.parse(td.decode(pt));
   }
 
-  return { setup, verify, encryptObj, decryptObj, newSalt };
+  /* 会话保持：把密钥导出为原始字节（base64 入库前由调用方转存 sessionStorage），刷新后重新导入 */
+  async function exportRaw(key) { return new Uint8Array(await crypto.subtle.exportKey("raw", key)); }
+  async function importRaw(raw) {
+    return crypto.subtle.importKey("raw", raw, { name: "AES-GCM", length: 256 }, false, ["encrypt", "decrypt"]);
+  }
+
+  return { setup, verify, encryptObj, decryptObj, newSalt, exportRaw, importRaw };
 })();
