@@ -17,14 +17,37 @@ const purging = new Set();    // 正在永久删除的条目 id（防连点）
 let idleTimer = null;
 const IDLE_MS = 5 * 60 * 1000; // 闲置 5 分钟自动锁定
 
+/* ---------------- 会话保持（刷新不锁，关页/闲置才锁） ----------------
+ * 解锁后的密钥导出原始字节存 sessionStorage（同标签页刷新可恢复，关闭标签页自动清除）。
+ * 注意：sessionStorage 与 localStorage.auth 配合——前者是「已解锁态」，后者是「已设主密码」。
+ */
+const SKEY = "vault.session";
+function b64u(b) { let s = ""; for (const x of b) s += String.fromCharCode(x); return btoa(s); }
+function ub64u(s) { const b = atob(s), o = new Uint8Array(b.length); for (let i = 0; i < b.length; i++) o[i] = b.charCodeAt(i); return o; }
+async function saveSession(key) {
+  try { sessionStorage.setItem(SKEY, b64u(await VaultCrypto.exportRaw(key))); } catch (e) {}
+}
+function clearSession() { try { sessionStorage.removeItem(SKEY); } catch (e) {} }
+async function tryRestoreSession() {
+  const blob = sessionStorage.getItem(SKEY);
+  if (!blob) return false;
+  try { KEY = await VaultCrypto.importRaw(ub64u(blob)); return true; } catch (e) { clearSession(); return false; }
+}
+
 /* ---------------- 启动 ---------------- */
 async function boot() {
   const { mode } = getStore();
   MODE = mode;
   const tag = $("#storeTag"); if (tag) tag.textContent = mode === "apisql" ? "加密 · apiSQL + MySQL" : "加密 · 本机存储";
   const auth = localStorage.getItem("vault.auth");
-  if (auth) { $("#unlockScr").style.display = "grid"; }
-  else { $("#setupScr").style.display = "grid"; }
+  if (!auth) { $("#setupScr").style.display = "grid"; return; }
+  /* 已设主密码：尝试用 sessionStorage 恢复解锁态（刷新后免输密码） */
+  if (await tryRestoreSession()) {
+    try { DB = await getStore().store.load(KEY); }
+    catch (e) { clearSession(); KEY = null; $("#unlockScr").style.display = "grid"; return; }
+    enterApp(); return;
+  }
+  $("#unlockScr").style.display = "grid";
 }
 $("#suBtn").addEventListener("click", doSetup);
 $("#suPw2").addEventListener("keydown", e => { if (e.key === "Enter") doSetup(); });
@@ -50,6 +73,7 @@ async function doSetup() {
     /* apisql 模式初始化空库（不写演示数据，避免污染 MySQL）；local 模式带测试种子 */
     DB = getStore().mode === "apisql" ? { entries: [], cats: [] } : { entries: seedEntries(), cats: seedCats() };
     await persist();
+    await saveSession(KEY);
     enterApp();
   } catch (e) {
     $("#suBtn").textContent = "创建保险库"; $("#suBtn").disabled = false;
@@ -71,6 +95,7 @@ async function doUnlock() {
     if (!KEY) throw new Error("主密码不正确，请重试。");
     const { store } = getStore();
     DB = await store.load(KEY);
+    await saveSession(KEY);           // 解锁成功 → 记住解锁态，刷新免输密码（关页清空）
   } catch (e) {
     btn.disabled = false; btn.classList.remove("loading"); btn.textContent = "解 锁";
     KEY = null;
@@ -107,6 +132,7 @@ function enterApp() {
 
 function lock() {
   KEY = null; DB = null;
+  clearSession();                     // 清掉解锁态，下次需重新输密码
   $("#app").classList.remove("in");
   const u = $("#unlockScr");
   u.classList.remove("gone"); u.style.display = "grid";
