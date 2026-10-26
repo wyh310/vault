@@ -597,8 +597,7 @@ function openDetail(id) {
 function openForm(e) {
   const isEdit = !!e;
   $("#modal").innerHTML = `
-    <div class="mh dark"><div class="fav">＋</div>
-      <div><div class="t">${isEdit ? "编辑条目" : "新增条目"}</div><div class="u">填写网站与登录信息</div></div>
+    <div class="mh"><div><div class="t">${isEdit ? "编辑条目" : "新增条目"}</div></div>
       <button class="x" onclick="closeModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:18px;height:18px"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="mb">
       <div class="fld"><label>名称 *</label><input id="fName" value="${isEdit ? escAttr(e.name) : ""}" placeholder="如 GitHub" /></div>
