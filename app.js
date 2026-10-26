@@ -36,14 +36,36 @@ async function tryRestoreSession() {
 
 /* ---------------- 启动 ---------------- */
 async function boot() {
-  const { mode } = getStore();
+  const { mode, store } = getStore();
   MODE = mode;
   const tag = $("#storeTag"); if (tag) tag.textContent = mode === "apisql" ? "加密 · apiSQL + MySQL" : "加密 · 本机存储";
   const auth = localStorage.getItem("vault.auth");
+  /* 多端同步：apisql 模式下盐以数据库 pv_meta 为准（保证各端/网址派生同一密钥） */
+  if (mode === "apisql") {
+    try {
+      const meta = await store.getMeta();
+      if (meta) {
+        /* 库里已有共享盐 → 以它为准覆盖本地，直接进入解锁页（不再「初始化」） */
+        localStorage.setItem("vault.auth", JSON.stringify({ salt: meta.salt, verifier: meta.verifier, shared: true }));
+        if (await tryRestoreSession()) {
+          try { DB = await store.load(KEY); enterApp(); return; }
+          catch (e) { clearSession(); KEY = null; }
+        }
+        $("#unlockScr").style.display = "grid"; return;
+      }
+      /* 库里还没有盐：若本机已初始化过，把本地盐推到库作为共享基准 */
+      if (auth) {
+        const a = JSON.parse(auth);
+        await store.saveMeta(a.salt, a.verifier);
+      }
+    } catch (e) {
+      console.warn("获取共享盐失败，回退本地逻辑", e);
+    }
+  }
   if (!auth) { $("#setupScr").style.display = "grid"; return; }
-  /* 已设主密码：尝试用 sessionStorage 恢复解锁态（刷新后免输密码） */
+  /* 尝试用 sessionStorage 恢复解锁态（刷新后免输密码） */
   if (await tryRestoreSession()) {
-    try { DB = await getStore().store.load(KEY); }
+    try { DB = await store.load(KEY); }
     catch (e) { clearSession(); KEY = null; $("#unlockScr").style.display = "grid"; return; }
     enterApp(); return;
   }
@@ -73,6 +95,10 @@ async function doSetup() {
     /* apisql 模式初始化空库（不写演示数据，避免污染 MySQL）；local 模式带测试种子 */
     DB = getStore().mode === "apisql" ? { entries: [], cats: [] } : { entries: seedEntries(), cats: seedCats() };
     await persist();
+    /* 多端同步：把盐写入数据库，作为所有端共享的基准（仅 apisql） */
+    if (getStore().mode === "apisql") {
+      try { await getStore().store.saveMeta(salt, verifier); } catch (e) { console.warn("共享盐写入失败", e); }
+    }
     await saveSession(KEY);
     enterApp();
   } catch (e) {
