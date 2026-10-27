@@ -62,7 +62,7 @@ async function boot() {
       console.warn("获取共享盐失败，回退本地逻辑", e);
     }
   }
-  if (!auth) { $("#setupScr").style.display = "grid"; return; }
+  if (!auth) { $("#unlockScr").style.display = "none"; $("#setupScr").style.display = "grid"; return; }
   /* 尝试用 sessionStorage 恢复解锁态（刷新后免输密码） */
   if (await tryRestoreSession()) {
     try { DB = await store.load(KEY); }
