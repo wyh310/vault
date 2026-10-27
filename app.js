@@ -64,21 +64,30 @@ async function boot() {
   MODE = mode;
   const tag = $("#storeTag"); if (tag) tag.textContent = mode === "apisql" ? "加密 · apiSQL + MySQL" : "加密 · 本机存储";
   const auth = localStorage.getItem("vault.auth");
+  const hasSession = !!sessionStorage.getItem(SKEY);   // 是否存在可静默恢复的会话
   const bootScr = $("#bootScr");
-  bootScr.style.display = "grid";
+  /* loading 只在两种情况出现：① 有会话可恢复（刷新场景）② 新设备需连库判定初始化。
+     已设主密码的常规进入 → 直接显示解锁页，不闪 loading */
+  if (hasSession || !auth) {
+    if (!hasSession) { $("#bootTitle").textContent = "加载中"; $("#bootMsg").textContent = "正在连接数据库…"; }
+    bootScr.style.display = "grid";
+  }
   $("#unlockScr").style.display = "none";
   /* 多端同步：apisql 模式下盐以数据库 pv_meta 为准（保证各端/网址派生同一密钥） */
-  if (mode === "apisql") {
+  if (mode === "apisql" && (hasSession || !auth)) {
     try {
       const meta = await store.getMeta();
       if (meta) {
         /* 库里已有共享盐 → 以它为准覆盖本地，直接进入解锁页（不再「初始化」） */
         localStorage.setItem("vault.auth", JSON.stringify({ salt: meta.salt, verifier: meta.verifier, shared: true }));
-        const ok = await restoreSession(store);
-        if (ok) { bootScr.style.display = "none"; enterApp(); return; }
+        if (hasSession) {
+          const ok = await restoreSession(store);
+          bootScr.style.display = "none";
+          if (ok) { enterApp(); return; }
+          showUnlockAfterFailedRestore(); return;
+        }
         bootScr.style.display = "none";
-        showUnlockAfterFailedRestore();
-        return;
+        $("#unlockScr").style.display = "grid"; return;   // 新设备无会话 → 直接解锁页
       }
       /* 库里还没有盐：若本机已初始化过，把本地盐推到库作为共享基准 */
       if (auth) {
@@ -90,11 +99,14 @@ async function boot() {
     }
   }
   if (!auth) { bootScr.style.display = "none"; $("#setupScr").style.display = "grid"; return; }
-  /* 尝试用 sessionStorage 恢复解锁态（刷新后免输密码） */
-  const ok = await restoreSession(store);
-  if (ok) { bootScr.style.display = "none"; enterApp(); return; }
+  if (hasSession) {   /* 本地模式恢复（或 apisql 取盐失败回退到本地） */
+    const ok = await restoreSession(store);
+    bootScr.style.display = "none";
+    if (ok) { enterApp(); return; }
+    showUnlockAfterFailedRestore(); return;
+  }
   bootScr.style.display = "none";
-  showUnlockAfterFailedRestore();
+  $("#unlockScr").style.display = "grid";
 }
 /* 恢复失败后的落地：若是网络类问题 → 保留密钥 + 给出「重试自动恢复」；否则回到常规解锁 */
 function showUnlockAfterFailedRestore() {
