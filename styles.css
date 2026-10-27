@@ -9,7 +9,7 @@
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
 html,body{height:100%}
 body{
-  font-family:"DM Sans",system-ui,sans-serif;color:var(--text);
+  font-family:"DM Sans","PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--text);
   background-color:var(--bg);
   background-image:
     linear-gradient(rgba(0,0,0,.045) 1px,transparent 1px),
@@ -17,7 +17,7 @@ body{
   background-size:44px 44px;
   -webkit-font-smoothing:antialiased;overflow:hidden;
 }
-.mono{font-family:"JetBrains Mono",ui-monospace,monospace}
+.mono{font-family:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
 button{font-family:inherit;cursor:pointer;border:none;background:none;color:inherit}
 input,select,textarea{font-family:inherit}
 ::selection{background:#1a1a1a;color:#fff}
