@@ -17,6 +17,20 @@
   </div>
 </div>
 
+<!-- ============ 访问口令（/proxy 服务端鉴权，输一次本机记住） ============ -->
+<div class="unlock" id="codeScr" style="display:none">
+  <div class="lock-card">
+    <div class="lock-badge">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 2 4 6v6c0 5 3.5 8 8 10 4.5-2 8-5 8-10V6l-8-4Z"/></svg>
+    </div>
+    <h2>访问口令</h2>
+    <p>此保险库已开启访问口令保护。<br/>输入后本机记住，无需重复输入。</p>
+    <div class="field"><input id="accessCode" type="password" placeholder="访问口令" autocomplete="off" /></div>
+    <div class="err" id="codeErr"></div>
+    <button class="unlock-btn" id="codeOk">确 认</button>
+  </div>
+</div>
+
 <!-- ============ 首次设置主密码 ============ -->
 <div class="unlock" id="setupScr" style="display:none">
   <div class="lock-card">
@@ -131,7 +145,7 @@
 <script defer src="config.js?v=14"></script>
 <script defer src="crypto.js?v=11"></script>
 <script defer src="passkey.js?v=1"></script>
-<script defer src="api.js?v=19"></script>
-<script defer src="app.js?v=51"></script>
+<script defer src="api.js?v=20"></script>
+<script defer src="app.js?v=52"></script>
 </body>
 </html>
