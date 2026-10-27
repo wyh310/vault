@@ -233,6 +233,11 @@ input,select,textarea{font-family:inherit}
 .b-edit.loading{opacity:.75;pointer-events:none}
 .b-edit.loading::before{content:"";display:inline-block;width:14px;height:14px;margin-right:7px;vertical-align:-2px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:vspin .7s linear infinite}
 @keyframes vspin{to{transform:rotate(360deg)}}
+/* 启动加载层（刷新时自动恢复会话） */
+.boot-spinner{width:34px;height:34px;margin:0 auto 18px;border-radius:50%;border:3px solid var(--line);border-top-color:var(--text);animation:vspin .8s linear infinite}
+.retry-auto{display:block;width:100%;margin-top:10px;height:40px;border-radius:10px;font-size:13.5px;font-weight:600;color:var(--muted);background:var(--card);border:1px solid var(--line);transition:.25s}
+.retry-auto:hover{color:var(--text);border-color:var(--text)}
+.retry-auto:disabled{opacity:.6}
 .b-danger{background:var(--card);color:var(--danger);border:1px solid rgba(208,69,58,.35)}
 .b-danger:hover{background:rgba(208,69,58,.08)}
 .b-danger.solid{background:var(--danger);color:#fff;border-color:var(--danger)}
