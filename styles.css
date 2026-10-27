@@ -238,6 +238,11 @@ input,select,textarea{font-family:inherit}
 .retry-auto{display:block;width:100%;margin-top:10px;height:40px;border-radius:10px;font-size:13.5px;font-weight:600;color:var(--muted);background:var(--card);border:1px solid var(--line);transition:.25s}
 .retry-auto:hover{color:var(--text);border-color:var(--text)}
 .retry-auto:disabled{opacity:.6}
+/* 解锁页 · 面容 / Passkey 快速解锁按钮 */
+.face-btn{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;height:46px;border-radius:10px;background:var(--card);border:1px solid var(--line);font-weight:600;font-size:14.5px;color:var(--text);transition:.25s;margin-bottom:14px}
+.face-btn:hover{border-color:var(--text)}
+.face-btn.loading{opacity:.7;pointer-events:none}
+.face-btn svg{width:18px;height:18px}
 .b-danger{background:var(--card);color:var(--danger);border:1px solid rgba(208,69,58,.35)}
 .b-danger:hover{background:rgba(208,69,58,.08)}
 .b-danger.solid{background:var(--danger);color:#fff;border-color:var(--danger)}
