@@ -24,6 +24,19 @@ export async function onRequest(context) {
     });
   }
 
+  // 用户级鉴权：保险库访问口令（VAULT_ACCESS_CODE，Dashboard 环境变量，与主密码无关）。
+  // 前端每次请求带 x-vault-code 头；未配置该变量时不校验（向后兼容/渐进启用）。
+  // 作用：防止链接泄露后匿名读库/清库——apiSQL Key 只锁「函数→apiSQL」，这层锁「用户→函数」。
+  if (env.VAULT_ACCESS_CODE) {
+    const got = request.headers.get("x-vault-code")
+             || new URL(request.url).searchParams.get("code") || "";
+    if (got !== env.VAULT_ACCESS_CODE) {
+      return new Response(JSON.stringify({ code: "UNAUTHORIZED", message: "访问口令缺失或不正确" }), {
+        status: 401, headers: { "Content-Type": "application/json" }
+      });
+    }
+  }
+
   // 原样透传查询串（params[名]=值 格式），服务端附加鉴权头
   const target = "https://open.apisql.cn/api/weternal_pwd/" + encodeURIComponent(iface)
                + new URL(request.url).search;
