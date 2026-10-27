@@ -135,6 +135,10 @@ $("#faceBtn").addEventListener("click", async () => {
   const btn = $("#faceBtn");
   if (btn.classList.contains("loading")) return;      // 防重复触发
   btn.classList.add("loading");
+  /* Face ID 通过后还有解包 + 拉库两步，期间用启动加载层给反馈 */
+  $("#bootTitle").textContent = "面容解锁中";
+  $("#bootMsg").textContent = "正在解密并加载数据…";
+  $("#bootScr").style.display = "grid";
   try {
     KEY = await VaultPasskey.unlock();
     const { store } = getStore();
@@ -144,6 +148,7 @@ $("#faceBtn").addEventListener("click", async () => {
     DB.cats = (DB.cats || []).map(c => typeof c === "string" ? c : (c && c.name) || "").filter(Boolean);
     enterApp();
   } catch (e) {
+    $("#bootScr").style.display = "none";
     btn.classList.remove("loading");
     const err = $("#err");
     const msg = /NotAllowed|用户取消|cancelled|canceled/i.test(e.name + " " + (e.message || "")) ? "已取消面容验证。"
