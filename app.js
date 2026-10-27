@@ -384,7 +384,10 @@ function bindCards() {
         ev.target.closest("[data-star]") || ev.target.closest(".pen") ||
         ev.target.closest("[data-restore]") || ev.target.closest("[data-purge]") ||
         ev.target.closest("[data-edit]")) return;
-    c.classList.toggle("open");
+    /* 手风琴：同一时间最多展开一张卡片，展开新卡片时自动收起其它 */
+    const willOpen = !c.classList.contains("open");
+    $$(".card.open").forEach(o => { if (o !== c) o.classList.remove("open"); });
+    c.classList.toggle("open", willOpen);
   }));
   $$("[data-edit]").forEach(b => b.addEventListener("click", ev => {
     ev.stopPropagation();
