@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
 <title>Vault · 私人密码保险库</title>
-<link rel="stylesheet" href="styles.css?v=41" />
+<link rel="stylesheet" href="styles.css?v=42" />
 </head>
 <body>
 
@@ -41,6 +41,10 @@
     </div>
     <h2>私人保险库</h2>
     <p>输入主密码以解锁你的密码库。<br/>所有数据仅保存在本机，不会上传。</p>
+    <button class="face-btn" id="faceBtn" style="display:none">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M8.5 10v1.5M15.5 10v1.5M12 10v3h-1"/><path d="M8.8 15.5c.9.9 2 1.4 3.2 1.4s2.3-.5 3.2-1.4"/></svg>
+      <span>面容解锁</span>
+    </button>
     <div class="field">
       <input id="master" type="password" placeholder="主密码" autocomplete="current-password" />
       <button class="eye" id="eye">
@@ -126,7 +130,8 @@
 
 <script defer src="config.js?v=14"></script>
 <script defer src="crypto.js?v=11"></script>
+<script defer src="passkey.js?v=1"></script>
 <script defer src="api.js?v=18"></script>
-<script defer src="app.js?v=47"></script>
+<script defer src="app.js?v=48"></script>
 </body>
 </html>
