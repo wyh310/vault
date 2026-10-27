@@ -36,6 +36,9 @@ async function tryRestoreSession() {
 
 /* ---------------- 启动 ---------------- */
 async function boot() {
+  /* 移动端：禁用浏览器对滚动位置的推断/恢复，配合 100dvh 防首屏落底 */
+  try { history.scrollRestoration = "manual"; } catch (e) {}
+  window.scrollTo(0, 0);
   const { mode, store } = getStore();
   MODE = mode;
   const tag = $("#storeTag"); if (tag) tag.textContent = mode === "apisql" ? "加密 · apiSQL + MySQL" : "加密 · 本机存储";
@@ -577,6 +580,8 @@ function showModal() { $("#scrim").classList.add("show"); $("#modal").classList.
 function closeModal() { $("#scrim").classList.remove("show"); $("#modal").classList.remove("show"); }
 $("#scrim").addEventListener("click", closeModal);
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+/* 移动端：拦截双指缩放（iOS 视觉视口平移后无滚动边界、拉不回来），个人工具可接受禁用页面缩放 */
+document.addEventListener("gesturestart", e => e.preventDefault());
 
 /* 详情弹窗底部：默认态（编辑/删除）与删除确认态（取消/确认删除） */
 function detailFootHTML(confirming) {
