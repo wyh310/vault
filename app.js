@@ -125,6 +125,29 @@ function showUnlockAfterFailedRestore() {
 $("#suBtn").addEventListener("click", doSetup);
 $("#suPw2").addEventListener("keydown", e => { if (e.key === "Enter") doSetup(); });
 
+/* ---------------- 访问口令（/proxy 服务端鉴权） ----------------
+ * api.js 收到 401 时调 window.__askVaultCode 弹此页；输入确认后自动重试原请求。 */
+let codeResolve = null;
+window.__askVaultCode = function askVaultCode(msg) {
+  return new Promise(resolve => {
+    codeResolve = resolve;
+    const err = $("#codeErr");
+    err.textContent = msg || ""; err.classList.toggle("show", !!msg);
+    $("#accessCode").value = "";
+    $("#codeScr").style.display = "grid";
+    setTimeout(() => $("#accessCode").focus(), 60);
+  });
+};
+function submitAccessCode() {
+  const v = $("#accessCode").value;
+  const err = $("#codeErr");
+  if (!v) { err.textContent = "请输入访问口令"; err.classList.add("show"); return; }
+  $("#codeScr").style.display = "none";
+  if (codeResolve) { const r = codeResolve; codeResolve = null; r(v); }
+}
+$("#codeOk").addEventListener("click", submitAccessCode);
+$("#accessCode").addEventListener("keydown", e => { if (e.key === "Enter") submitAccessCode(); });
+
 /* ---------------- 面容 / Passkey 快速解锁 ---------------- */
 function refreshFaceBtn() {
   VaultPasskey.available().then(ok => {
