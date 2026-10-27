@@ -4,9 +4,18 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1.0, user-scalable=no" />
 <title>Vault · 私人密码保险库</title>
-<link rel="stylesheet" href="styles.css?v=40" />
+<link rel="stylesheet" href="styles.css?v=41" />
 </head>
 <body>
+
+<!-- ============ 启动加载（刷新时自动恢复会话，不回解锁页） ============ -->
+<div class="unlock" id="bootScr" style="display:none">
+  <div class="lock-card">
+    <div class="boot-spinner"></div>
+    <h2>正在恢复保险库</h2>
+    <p id="bootMsg">正在解密并加载数据…</p>
+  </div>
+</div>
 
 <!-- ============ 首次设置主密码 ============ -->
 <div class="unlock" id="setupScr" style="display:none">
@@ -25,7 +34,7 @@
 </div>
 
 <!-- ============ 解锁 ============ -->
-<div class="unlock" id="unlockScr">
+<div class="unlock" id="unlockScr" style="display:none">
   <div class="lock-card">
     <div class="lock-badge">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.3" r="1.5"/></svg>
@@ -40,6 +49,7 @@
     </div>
     <div class="err" id="err">主密码不正确，请重试。</div>
     <button class="unlock-btn" id="unlockBtn">解 锁</button>
+    <button class="retry-auto" id="retryAuto" style="display:none">网络异常？点此重试自动恢复</button>
   </div>
 </div>
 
@@ -117,6 +127,6 @@
 <script defer src="config.js?v=14"></script>
 <script defer src="crypto.js?v=11"></script>
 <script defer src="api.js?v=18"></script>
-<script defer src="app.js?v=45"></script>
+<script defer src="app.js?v=46"></script>
 </body>
 </html>
