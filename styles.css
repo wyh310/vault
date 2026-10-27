@@ -7,7 +7,7 @@
   --ease:cubic-bezier(.16,1,.3,1);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html,body{height:100%}
+html,body{height:100%;overflow:hidden;overflow-x:hidden;max-width:100%}
 body{
   font-family:"DM Sans","PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--text);
   background-color:var(--bg);
@@ -23,7 +23,7 @@ input,select,textarea{font-family:inherit}
 ::selection{background:#1a1a1a;color:#fff}
 
 /* ---------- app shell ---------- */
-.app{display:flex;height:100vh;opacity:0;transform:scale(.99);transition:opacity .6s var(--ease),transform .6s var(--ease)}
+.app{display:flex;height:100vh;height:100dvh;opacity:0;transition:opacity .6s var(--ease)}
 .app.in{opacity:1;transform:none}
 .sidebar{width:240px;flex:none;border-right:1px solid var(--line);background:var(--card);display:flex;flex-direction:column;padding:22px 16px;gap:6px;transition:width .35s var(--ease),padding .35s var(--ease);overflow:hidden}
 /* 桌面端收起为图标栏 */
@@ -187,7 +187,7 @@ input,select,textarea{font-family:inherit}
 /* ---------- modal（居中） ---------- */
 .scrim{position:fixed;inset:0;z-index:40;background:rgba(20,20,18,.4);backdrop-filter:blur(2px);opacity:0;visibility:hidden;transition:.4s var(--ease)}
 .scrim.show{opacity:1;visibility:visible}
-.modal{position:fixed;top:50%;left:50%;z-index:45;width:min(560px,calc(100vw - 32px));max-height:calc(100vh - 64px);
+.modal{position:fixed;top:50%;left:50%;z-index:45;width:min(560px,calc(100% - 32px));max-height:calc(100vh - 64px);max-height:calc(100dvh - 64px);
   transform:translate(-50%,-46%) scale(.98);opacity:0;visibility:hidden;transition:.45s var(--ease);
   background:var(--card);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow);display:flex;flex-direction:column}
 .modal.show{transform:translate(-50%,-50%) scale(1);opacity:1;visibility:visible}
@@ -342,6 +342,8 @@ input,select,textarea{font-family:inherit}
 .toast svg{width:16px;height:16px}
 
 @media (max-width:760px){
+  /* 问题A：所有输入框字号统一 16px，根治 iOS 聚焦自动放大（保留各自高度/padding） */
+  input,textarea{font-size:16px}
   .sidebar{position:fixed;left:0;top:0;bottom:0;z-index:30;transform:translateX(-100%);transition:.4s var(--ease)}
   .sidebar.open{transform:none;box-shadow:var(--shadow)}
   .side-mask{display:block;position:fixed;inset:0;z-index:29;background:rgba(20,20,18,.35);opacity:0;visibility:hidden;transition:.35s var(--ease)}
@@ -354,7 +356,7 @@ input,select,textarea{font-family:inherit}
   .btn-add .bt{display:none}
   .content{padding:14px 16px 28px}
   .grid{grid-template-columns:1fr}
-  .modal{width:calc(100vw - 20px);max-height:calc(100vh - 32px)}
+  .modal{width:calc(100% - 20px);max-height:calc(100dvh - 32px)}
   /* 手机端弹窗紧凑化：头部/表单/间距全面收紧 */
   .mh{padding:14px 16px;gap:10px}
   .mh .fav{width:36px;height:36px;font-size:14px}
