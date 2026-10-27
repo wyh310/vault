@@ -12,8 +12,8 @@ body{
   font-family:"DM Sans","PingFang SC","Microsoft YaHei",system-ui,sans-serif;color:var(--text);
   background-color:var(--bg);
   background-image:
-    linear-gradient(rgba(0,0,0,.045) 1px,transparent 1px),
-    linear-gradient(90deg,rgba(0,0,0,.045) 1px,transparent 1px);
+    linear-gradient(rgba(0,0,0,.018) 1px,transparent 1px),
+    linear-gradient(90deg,rgba(0,0,0,.018) 1px,transparent 1px);
   background-size:44px 44px;
   -webkit-font-smoothing:antialiased;overflow:hidden;
 }
@@ -84,7 +84,7 @@ input,select,textarea{font-family:inherit}
 .view-sub{color:var(--muted);font-size:13.5px;margin-bottom:22px;max-width:62ch;line-height:1.6}
 
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;align-items:start}
-.card{position:relative;border:1px solid var(--line);background:var(--card);border-radius:14px;padding:13px 16px;cursor:pointer;transition:.3s var(--ease)}
+.card{position:relative;border:1px solid var(--line);background:var(--card);border-radius:14px;padding:13px 16px;cursor:pointer;transition:.3s var(--ease);box-shadow:0 1px 3px rgba(0,0,0,.045)}
 .card:hover{border-color:var(--text);transform:translateY(-2px);box-shadow:var(--shadow)}
 .card .top{display:flex;align-items:center;gap:12px;margin-bottom:10px}
 .fav{width:40px;height:40px;flex:none;border-radius:10px;display:grid;place-items:center;font-weight:700;font-size:16px;border:1px solid var(--line);background:var(--card-2);color:var(--text)}
