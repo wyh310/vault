@@ -475,7 +475,7 @@ function cardTitleLine(e) {
 /* 卡片次行：网址（备注暂不在卡片展示；没有网址则整行省略，不留空行） */
 function cardSubLine(e) {
   if (!e.url) return "";
-  return `<div class="sub2"><span class="usr" data-cb="${escAttr(e.url)}" data-tip="已复制网址" title="点击复制">${esc(e.url)}</span></div>`;
+  return `<div class="sub2"><span class="usr" data-cf="url" data-tip="已复制网址" title="点击复制">${esc(e.url)}</span></div>`;
 }
 function cardHTML(e) {
   return `<div class="card" data-id="${e.id}">
@@ -489,10 +489,10 @@ function cardHTML(e) {
     </div>
     <div class="body">
     <div class="crow"><span class="cl">账号</span><span class="cv ${e.user ? "" : "ph"}">${e.user ? esc(e.user) : "未设置账号"}</span>${e.user ? `
-      <button class="icbtn" data-cb="${escAttr(e.user)}" data-tip="已复制账号" title="复制账号">${I.copy}</button>` : ""}</div>
+      <button class="icbtn" data-cf="user" data-tip="已复制账号" title="复制账号">${I.copy}</button>` : ""}</div>
     <div class="crow"><span class="cl">密码</span><span class="cv mono" id="cpw-${e.id}">${cardMask(e.pw)}</span>
       <button class="icbtn" data-eye="${e.id}" title="显示/隐藏">${I.eye}</button>
-      <button class="icbtn" data-cb="${escAttr(e.pw)}" data-tip="已复制密码" title="复制密码">${I.copy}</button></div>
+      <button class="icbtn" data-cf="pw" data-tip="已复制密码" title="复制密码">${I.copy}</button></div>
     </div></div>`;
 }
 function bindCards() {
@@ -540,10 +540,17 @@ function bindEntryBtns() {
     b.innerHTML = shown ? I.eye : I.eyeOff;
     b.classList.toggle("on", !shown);
   }));
-  $$("[data-cb]").forEach(b => b.addEventListener("click", ev => {
+  /* 复制按钮：DOM 只存字段名（data-cf），明文点击时从内存 DB 现取——防扩展读属性窃取 */
+  $$("[data-cf]").forEach(b => b.addEventListener("click", ev => {
     ev.stopPropagation();
+    const card = b.closest(".card");
+    const eid = card ? card.dataset.id : b.dataset.eid;
+    const e = DB.entries.find(x => x.id === eid);
+    if (!e) return;
+    const f = b.dataset.cf;
+    const v = f === "url" ? (e.url || "") : f === "user" ? (e.user || "") : f === "pw" ? (e.pw || "") : "";
     /* catch：无头环境/非 HTTPS 下剪贴板可能被拒，避免未捕获的 Promise 拒绝 */
-    navigator.clipboard?.writeText(b.dataset.cb).catch(() => {});
+    navigator.clipboard?.writeText(v).catch(() => {});
     toast(b.dataset.tip || "已复制到剪贴板");
   }));
 }
@@ -560,10 +567,10 @@ function trashCardHTML(e) {
     </div>
     <div class="body">
     <div class="crow"><span class="cl">账号</span><span class="cv ${e.user ? "" : "ph"}">${e.user ? esc(e.user) : "未设置账号"}</span>${e.user ? `
-      <button class="icbtn" data-cb="${escAttr(e.user)}" data-tip="已复制账号" title="复制账号">${I.copy}</button>` : ""}</div>
+      <button class="icbtn" data-cf="user" data-tip="已复制账号" title="复制账号">${I.copy}</button>` : ""}</div>
     <div class="crow"><span class="cl">密码</span><span class="cv mono" id="cpw-${e.id}">${cardMask(e.pw)}</span>
       <button class="icbtn" data-eye="${e.id}" title="显示/隐藏">${I.eye}</button>
-      <button class="icbtn" data-cb="${escAttr(e.pw)}" data-tip="已复制密码" title="复制密码">${I.copy}</button></div>
+      <button class="icbtn" data-cf="pw" data-tip="已复制密码" title="复制密码">${I.copy}</button></div>
     </div></div>`;
 }
 function renderTrash() {
@@ -793,12 +800,12 @@ function openDetail(id) {
     <div class="mh dark">${favAvatar(e.name)}<div><div class="t">${esc(e.name)}</div></div>
       <button class="x" onclick="closeModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:18px;height:18px"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
     <div class="mb">
-      <div class="row"><span class="rl">账号</span><span class="chip ${e.user ? "" : "ph"}">${e.user ? esc(e.user) : "未设置账号"}</span>${e.user ? `<button class="icbtn" data-copy="${escAttr(e.user)}" data-tip="已复制账号">${I.copy}</button>` : ""}</div>
+      <div class="row"><span class="rl">账号</span><span class="chip ${e.user ? "" : "ph"}">${e.user ? esc(e.user) : "未设置账号"}</span>${e.user ? `<button class="icbtn" data-cf="user" data-eid="${e.id}" data-tip="已复制账号">${I.copy}</button>` : ""}</div>
       <div class="row"><span class="rl">密码</span><span class="chip mono" id="dpw">${mask(e.pw)}</span>
         <button class="icbtn" id="reveal">${I.eye}</button>
-        <button class="icbtn" data-copy="${escAttr(e.pw)}" data-tip="已复制密码">${I.copy}</button></div>
+        <button class="icbtn" data-cf="pw" data-eid="${e.id}" data-tip="已复制密码">${I.copy}</button></div>
       ${e.url ? `<div class="row"><span class="rl">网址</span><span class="chip">${esc(e.url)}</span>
-        <button class="icbtn" data-copy="${escAttr(e.url)}" data-tip="已复制网址">${I.copy}</button></div>` : ""}
+        <button class="icbtn" data-cf="url" data-eid="${e.id}" data-tip="已复制网址">${I.copy}</button></div>` : ""}
       <div class="row"><span class="rl">分类</span><span class="chip cat">${esc(e.cat)}</span></div>
       ${e.note ? `<div class="row top"><span class="rl">备注</span><span class="note">${esc(e.note)}</span></div>` : ""}
     </div>
@@ -938,8 +945,13 @@ function emptyHTML(t, s) {
   return `<div class="empty"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg><h3>${t}</h3><p>${s}</p></div>`;
 }
 function bindCopy() {
-  $$("[data-copy]").forEach(b => b.addEventListener("click", () => {
-    navigator.clipboard?.writeText(b.dataset.copy); toast(b.dataset.tip || "已复制到剪贴板");
+  $$("[data-cf][data-eid]").forEach(b => b.addEventListener("click", () => {
+    const e = DB.entries.find(x => x.id === b.dataset.eid);
+    if (!e) return;
+    const f = b.dataset.cf;
+    const v = f === "url" ? (e.url || "") : f === "user" ? (e.user || "") : f === "pw" ? (e.pw || "") : "";
+    navigator.clipboard?.writeText(v).catch(() => {});
+    toast(b.dataset.tip || "已复制到剪贴板");
   }));
 }
 let toastT;
