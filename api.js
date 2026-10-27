@@ -148,6 +148,7 @@ function toLocalDT(v) {
 }
 function createApisqlStore(cfg) {
   const E = cfg.endpoints, FAV_ON = 1, FAV_OFF = 2, DEL_YES = 1, DEL_NO = 2;
+  let catCache = null;   // 远端分类缓存：load 时建立，syncCats 以此为 diff 基准（省一次 cat_list 往返）
   return {
     async load(key) {
       const rows = await apiCall(cfg, E.list);
@@ -171,10 +172,9 @@ function createApisqlStore(cfg) {
           fav: r.fav === FAV_ON, deleted: r.deleted === DEL_YES, updated_at: toLocalDT(r.updated_at) });
       }
       if (broken) setTimeout(() => toast(`有 ${broken} 条数据与当前主密码不匹配，已跳过（旧密文无法解密，可在数据库中清理）`), 600);
-      return {
-        entries,
-        cats: (await apiCall(cfg, E.cats)).map(r => r.name)
-      };
+      const cats = (await apiCall(cfg, E.cats)).map(r => r.name);
+      catCache = cats;                                    // 首次加载缓存远端分类，后续 syncCats 以此为基准
+      return { entries, cats };
     },
     async save(key, data) {
       for (const e of data.entries) {
@@ -196,15 +196,19 @@ function createApisqlStore(cfg) {
         updated_at: new Date().toISOString().slice(0, 19).replace("T", " ")
       });
     },
-    /* 分类 diff 同步：本地有、线上没有 → cat_save 新增；线上有、本地没有 → cat_delete 清理 */
+    /* 分类 diff 同步：以「上次同步结果缓存」为基准做 diff，不再每次白拉 cat_list；
+       本地与缓存一致 → 零请求直接返回。首次（缓存为空）退化为全量补齐。 */
     async syncCats(cats) {
-      const remote = (await apiCall(cfg, E.cats)).map(r => r.name);
+      const base = Array.isArray(catCache) ? catCache : null;
+      if (base && base.length === cats.length && base.every(c => cats.includes(c))) return;  // 无变化
+      const remote = base || [];
       for (const c of cats) {
         if (!remote.includes(c)) await apiCall(cfg, E.catSave, { name: c });
       }
       for (const c of remote) {
         if (!cats.includes(c)) await apiCall(cfg, E.catDel, { name: c });
       }
+      catCache = [...cats];
     },
     /* 物理删除（需平台建 entry_purge 接口；未建则抛错由调用方降级处理） */
     async purgeEntry(key, id) {
