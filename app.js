@@ -580,38 +580,15 @@ function showModal() { $("#scrim").classList.add("show"); $("#modal").classList.
 function closeModal() { $("#scrim").classList.remove("show"); $("#modal").classList.remove("show"); }
 $("#scrim").addEventListener("click", closeModal);
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
-/* 移动端：禁用整页平移 / 双指缩放（个人工具，可接受锁死页面级手势）
- * iOS 不把 html/body 的 overflow:hidden 当「禁止文档拖动」，且短列表/边界处即使落在可滚容器里
- * 也会被当成整页平移——所以这里按「手势方向 + 容器是否真能朝该方向滚」精确放行，其余一律拦死。 */
+/* 移动端：仅禁双指缩放（gesturestart + 双指 touchmove 兜底）。
+ * 单指手势全部放行——文档层 html,body 已 overflow:hidden 本就不可滚，不该靠拦单指来"防平移"，
+ * 否则会堵死 Safari 地址栏收起/视觉视口复位的唯一退路。 */
 document.addEventListener("gesturestart", e => e.preventDefault());
-let _ty = 0, _tx = 0;
-document.addEventListener("touchstart", e => { _ty = e.touches[0].clientY; _tx = e.touches[0].clientX; }, { passive: true });
-document.addEventListener("touchmove", e => {
-  if (e.touches.length > 1) { e.preventDefault(); return; }                 // 双指缩放
-  const el = e.target.closest(".content,.modal,.cf-menu,.dd-menu,.sidebar");
-  if (!el) { e.preventDefault(); return; }                                  // 落点在可滚容器外 → 整页平移，拦
-  const canY = el.scrollHeight > el.clientHeight + 1;                       // 该容器纵向是否真能滚动
-  const canX = el.scrollWidth  > el.clientWidth  + 1;                       // 横向（弹窗/下拉一般无）
-  const dy = e.touches[0].clientY - _ty, dx = e.touches[0].clientX - _tx;   // 本帧相对起点位移
-  if (!canY && !canX) { e.preventDefault(); return; }                      // 根本滚不动 → 放行即变整页平移，拦
-  if (Math.abs(dx) > Math.abs(dy)) {                                        // 横向手势
-    if (!canX || (dx > 0 && el.scrollLeft <= 0) || (dx < 0 && el.scrollLeft >= el.scrollWidth - el.clientWidth - 1)) { e.preventDefault(); return; }
-  } else {                                                                  // 纵向手势
-    if (!canY || (dy > 0 && el.scrollTop <= 0) || (dy < 0 && el.scrollTop >= el.scrollHeight - el.clientHeight - 1)) { e.preventDefault(); return; }
-  }
-  // 其余：容器确实能朝该方向滚动且未到边界 → 放行，正常滚动
-}, { passive: false });
-/* 视口归位：拦死触摸后，键盘弹出/历史偏移会把视觉视口卡在错位处且无法拖回，
- * 这里一旦发现视口偏移（顶部内容被顶出屏幕）立即拉回原点 */
+document.addEventListener("touchmove", e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+/* 视口归位：只兜"历史/恢复滚动"造成的整页偏移，键盘/聚焦场景不再强拉顶部 */
 (function () {
   const rs = () => window.scrollTo(0, 0);
   window.addEventListener("pageshow", rs);
-  window.addEventListener("resize", rs);
-  window.addEventListener("focus", rs, true);
-  if (window.visualViewport) {
-    window.visualViewport.addEventListener("resize", rs);
-    window.visualViewport.addEventListener("scroll", rs);
-  }
 })();
 
 /* 详情弹窗底部：默认态（编辑/删除）与删除确认态（取消/确认删除） */
