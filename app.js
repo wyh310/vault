@@ -87,7 +87,7 @@ async function boot() {
           showUnlockAfterFailedRestore(); return;
         }
         bootScr.style.display = "none";
-        $("#unlockScr").style.display = "grid"; return;   // 新设备无会话 → 直接解锁页
+        $("#unlockScr").style.display = "grid"; refreshFaceBtn(); return;   // 新设备无会话 → 直接解锁页
       }
       /* 库里还没有盐：若本机已初始化过，把本地盐推到库作为共享基准 */
       if (auth) {
@@ -106,12 +106,13 @@ async function boot() {
     showUnlockAfterFailedRestore(); return;
   }
   bootScr.style.display = "none";
-  $("#unlockScr").style.display = "grid";
+  $("#unlockScr").style.display = "grid"; refreshFaceBtn();
 }
 /* 恢复失败后的落地：若是网络类问题 → 保留密钥 + 给出「重试自动恢复」；否则回到常规解锁 */
 function showUnlockAfterFailedRestore() {
   const u = $("#unlockScr");
   u.style.display = "grid";
+  refreshFaceBtn();
   const keepKey = !!lastRestoreErr && !isKeyMismatch(lastRestoreErr) && !!sessionStorage.getItem(SKEY);
   const btn = $("#retryAuto");
   if (btn) btn.style.display = keepKey ? "block" : "none";
@@ -123,6 +124,34 @@ function showUnlockAfterFailedRestore() {
 }
 $("#suBtn").addEventListener("click", doSetup);
 $("#suPw2").addEventListener("keydown", e => { if (e.key === "Enter") doSetup(); });
+
+/* ---------------- 面容 / Passkey 快速解锁 ---------------- */
+function refreshFaceBtn() {
+  VaultPasskey.available().then(ok => {
+    $("#faceBtn").style.display = (ok && VaultPasskey.isEnabled()) ? "flex" : "none";
+  }).catch(() => {});
+}
+$("#faceBtn").addEventListener("click", async () => {
+  const btn = $("#faceBtn");
+  if (btn.classList.contains("loading")) return;      // 防重复触发
+  btn.classList.add("loading");
+  try {
+    KEY = await VaultPasskey.unlock();
+    const { store } = getStore();
+    DB = await store.load(KEY);
+    await saveSession(KEY);
+    /* 归一化 cats：与 doUnlock 保持一致 */
+    DB.cats = (DB.cats || []).map(c => typeof c === "string" ? c : (c && c.name) || "").filter(Boolean);
+    enterApp();
+  } catch (e) {
+    btn.classList.remove("loading");
+    const err = $("#err");
+    const msg = /NotAllowed|用户取消|cancelled|canceled/i.test(e.name + " " + (e.message || "")) ? "已取消面容验证。"
+      : "面容解锁失败：" + (e.message || e.name || "未知错误") + "（可改用主密码解锁）";
+    err.textContent = msg; err.classList.add("show");
+    setTimeout(() => err.classList.remove("show"), 5000);
+  }
+});
 $("#unlockBtn").addEventListener("click", doUnlock);
 $("#master").addEventListener("keydown", e => { if (e.key === "Enter") doUnlock(); });
 /* 网络异常后的「重试自动恢复」：直接用 sessionStorage 里的密钥重试，不必重输主密码 */
@@ -224,6 +253,7 @@ function lock() {
   $("#app").classList.remove("in");
   const u = $("#unlockScr");
   u.classList.remove("gone"); u.style.display = "grid";
+  refreshFaceBtn();
   $("#master").value = ""; $("#err").classList.remove("show");
   const ra = $("#retryAuto"); if (ra) ra.style.display = "none";   // 主动锁定后没有可用会话，关掉重试入口
   u.classList.remove("shake");
@@ -621,6 +651,9 @@ function renderSettings() {
         <div class="st"><b>加密方案</b><small>PBKDF2-SHA256 · 310,000 次迭代 → AES-256-GCM（密钥仅存内存）</small></div></div>
       <div class="set"><div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg></div>
         <div class="st"><b>数据存储</b><small>${MODE === "apisql" ? "apiSQL 接口 → MySQL（敏感列已加密）" : "浏览器 localStorage（AES-GCM 整包加密）"}</small></div></div>
+      <div class="set"><div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M8.5 10v1.5M15.5 10v1.5M12 10v3h-1"/><path d="M8.8 15.5c.9.9 2 1.4 3.2 1.4s2.3-.5 3.2-1.4"/></svg></div>
+        <div class="st"><b>面容 / Passkey 快速解锁</b><small id="faceSub"></small></div>
+        <button class="switch" id="faceSwitch" style="flex:none"><i></i></button></div>
       <div class="set"><div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v12M12 15l-4-4M12 15l4-4M4 21h16"/></svg></div>
         <div class="st"><b>导出备份</b><small>下载加密数据包（仍需主密码才能解密）</small></div>
         <button class="b-ghost" style="flex:none;padding:9px 16px;height:auto" id="exportBtn">导出</button></div>
@@ -636,6 +669,36 @@ function renderSettings() {
     a.href = URL.createObjectURL(blob); a.download = "vault-backup.json"; a.click();
     toast("已导出加密备份");
   });
+  /* 面容 / Passkey 快速解锁：开关状态 + 开启/关闭逻辑 */
+  (async () => {
+    const sw = $("#faceSwitch"), sub = $("#faceSub");
+    const supported = await VaultPasskey.available();
+    const on = VaultPasskey.isEnabled();
+    sw.classList.toggle("on", on);
+    sub.textContent = !supported ? "此设备/浏览器不支持（需 iOS 18+ Safari 或 Chrome 128+）"
+      : on ? "已开启 · 本设备解锁时可用 Face ID / Touch ID"
+      : "开启后解锁页出现面容按钮（主密码仍可随时使用）";
+    if (!supported) { sw.style.opacity = ".45"; sw.style.pointerEvents = "none"; return; }
+    sw.addEventListener("click", async () => {
+      if (sw.classList.contains("loading")) return;
+      if (VaultPasskey.isEnabled()) {
+        VaultPasskey.disable();
+        toast("已关闭面容解锁（包裹数据已删除）");
+        renderSettings(); return;
+      }
+      sw.classList.add("loading"); sw.style.opacity = ".6";
+      try {
+        await VaultPasskey.enable(KEY);
+        toast("已开启面容解锁，下次解锁试试");
+        renderSettings();
+      } catch (e) {
+        sw.classList.remove("loading"); sw.style.opacity = "";
+        const msg = /NotAllowed|用户取消/i.test(e.name + (e.message || "")) ? "已取消"
+          : "开启失败：" + (e.message || e.name || "未知错误");
+        toast(msg);
+      }
+    });
+  })();
 }
 
 /* ---------------- 弹窗 ---------------- */
