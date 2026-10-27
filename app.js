@@ -581,9 +581,14 @@ function closeModal() { $("#scrim").classList.remove("show"); $("#modal").classL
 $("#scrim").addEventListener("click", closeModal);
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
 /* 移动端：拦截双指缩放（iOS 视觉视口平移后无滚动边界、拉不回来），个人工具可接受禁用页面缩放
- * gesturestart 在部分 iOS 第三方浏览器不触发；touchmove 双指兜底更可靠（必须 passive:false） */
+ * gesturestart 在部分 iOS 第三方浏览器不触发；touchmove 双指兜底更可靠（必须 passive:false）。
+ * 另：iOS 不把 html/body 的 overflow:hidden 当「禁止文档拖动」，会整页平移——
+ *     这里按触摸目标分流：在真正可滚动的容器（列表/弹窗/下拉）内放行，其余一律禁止默认拖动。 */
 document.addEventListener("gesturestart", e => e.preventDefault());
-document.addEventListener("touchmove", e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
+document.addEventListener("touchmove", e => {
+  if (e.touches.length > 1) { e.preventDefault(); return; }                    // 双指缩放
+  if (!e.target.closest(".content,.modal,.cf-menu,.dd-menu,.sidebar")) e.preventDefault(); // 文档级拖动
+}, { passive: false });
 
 /* 详情弹窗底部：默认态（编辑/删除）与删除确认态（取消/确认删除） */
 function detailFootHTML(confirming) {
