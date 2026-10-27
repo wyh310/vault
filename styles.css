@@ -75,7 +75,7 @@ input,select,textarea{font-family:inherit}
 .btn-add:hover{opacity:.85}
 .btn-add svg{width:16px;height:16px}
 
-.content{flex:1;overflow:auto;padding:30px 26px 40px}
+.content{flex:1;overflow:auto;overflow-x:hidden;overscroll-behavior:none;padding:30px 26px 40px}
 .content::-webkit-scrollbar{width:8px}
 .content::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px}
 .view-head{display:flex;align-items:baseline;gap:12px;margin-bottom:6px}
