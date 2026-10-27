@@ -18,7 +18,11 @@
  * 容错原则：任何异常（网络失败 / HTTP 非 2xx / 非 JSON / 缺 rows）都必须**显式抛错**，
  * 绝不能静默返回空数组——否则会出现「提示保存成功、刷新后数据没了」的假象。
  * ------------------------------------------------------------ */
-async function apiCall(cfg, iface, params = {}) {
+/* 访问口令：代理模式下每次请求附带（Cloudflare 环境变量 VAULT_ACCESS_CODE 校验）。
+ * 本机 localStorage 记住；401 时由 UI 层（window.__askVaultCode）弹框补输并自动重试。 */
+const ACODE_KEY = "vault.acode";
+
+async function apiCallOnce(cfg, iface, params = {}) {
   const headers = { "Accept": "application/json" };
   const q = Object.entries(params).filter(([, v]) => v !== undefined && v !== null);
   let url;
@@ -26,6 +30,7 @@ async function apiCall(cfg, iface, params = {}) {
     // 同源代理：/proxy/<接口>?params[名]=值（密钥由 Pages Function 服务端附加）
     const p = cfg.proxy.replace(/^\/+|\/+$/g, "");
     url = new URL(location.origin + "/" + (p ? p + "/" : "") + iface);
+    try { headers["x-vault-code"] = localStorage.getItem(ACODE_KEY) || ""; } catch (e) {}
   } else {
     url = new URL(cfg.base.replace(/\/+$/, "") + "/" + iface);
     headers["Authorization"] = "Bearer " + cfg.key;
@@ -36,6 +41,11 @@ async function apiCall(cfg, iface, params = {}) {
     res = await fetch(url, { method: "GET", headers });
   } catch (e) {
     throw new Error("网络请求失败（" + iface + "）");
+  }
+  if (res.status === 401) {
+    const err = new Error("访问口令缺失或不正确");
+    err.needsCode = true;
+    throw err;
   }
   if (!res.ok) {
     throw new Error("接口 " + iface + " 返回 HTTP " + res.status +
@@ -50,6 +60,23 @@ async function apiCall(cfg, iface, params = {}) {
   const rows = data.rows || data.data;
   if (!Array.isArray(rows)) throw new Error("接口 " + iface + " 响应缺少 rows 字段");
   return rows;
+}
+/* 外层：401 → 弹口令框（app.js 注入 window.__askVaultCode）→ 存本机 → 重试（最多 3 次） */
+async function apiCall(cfg, iface, params = {}) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await apiCallOnce(cfg, iface, params);
+    } catch (e) {
+      if (e && e.needsCode && typeof window !== "undefined" && typeof window.__askVaultCode === "function") {
+        const code = await window.__askVaultCode(attempt ? "口令不正确，请重试" : "");
+        if (!code) throw e;
+        try { localStorage.setItem(ACODE_KEY, code); } catch (err) {}
+        continue;
+      }
+      throw e;
+    }
+  }
+  throw new Error("访问口令验证未通过");
 }
 
 /* ---------- 字段级加密（apisql 模式专用） ----------
