@@ -35,6 +35,27 @@ async function tryRestoreSession() {
 }
 
 /* ---------------- 启动 ---------------- */
+/* 刷新后自动恢复：优先用 sessionStorage 里的密钥静默恢复，全程显示 loading，
+ * 只有在「确实需要主密码」时才回到解锁页；瞬时网络错误会重试，不再误清密钥。 */
+let lastRestoreErr = null;
+function isKeyMismatch(e) { return /解密失败|密钥不匹配|decrypt/i.test((e && e.message) || ""); }
+async function restoreSession(store, tries) {
+  tries = tries || 3;
+  if (!(await tryRestoreSession())) return false;
+  for (let i = 0; i < tries; i++) {
+    try { DB = await store.load(KEY); return true; }
+    catch (e) {
+      lastRestoreErr = e;
+      if (isKeyMismatch(e)) { clearSession(); KEY = null; return false; }  // 密钥真不匹配 → 必须重新输密码
+      if (i < tries - 1) {                                          // 瞬时网络错误 → 退避重试
+        const m = $("#bootMsg"); if (m) m.textContent = "网络波动，正在重试…（" + (i + 2) + "/" + tries + "）";
+        await new Promise(r => setTimeout(r, 700 * (i + 1)));
+      }
+    }
+  }
+  return false;
+}
+
 async function boot() {
   /* 移动端：禁用浏览器对滚动位置的推断/恢复，配合 100dvh 防首屏落底 */
   try { history.scrollRestoration = "manual"; } catch (e) {}
@@ -43,6 +64,9 @@ async function boot() {
   MODE = mode;
   const tag = $("#storeTag"); if (tag) tag.textContent = mode === "apisql" ? "加密 · apiSQL + MySQL" : "加密 · 本机存储";
   const auth = localStorage.getItem("vault.auth");
+  const bootScr = $("#bootScr");
+  bootScr.style.display = "grid";
+  $("#unlockScr").style.display = "none";
   /* 多端同步：apisql 模式下盐以数据库 pv_meta 为准（保证各端/网址派生同一密钥） */
   if (mode === "apisql") {
     try {
@@ -50,11 +74,11 @@ async function boot() {
       if (meta) {
         /* 库里已有共享盐 → 以它为准覆盖本地，直接进入解锁页（不再「初始化」） */
         localStorage.setItem("vault.auth", JSON.stringify({ salt: meta.salt, verifier: meta.verifier, shared: true }));
-        if (await tryRestoreSession()) {
-          try { DB = await store.load(KEY); enterApp(); return; }
-          catch (e) { clearSession(); KEY = null; }
-        }
-        $("#unlockScr").style.display = "grid"; return;
+        const ok = await restoreSession(store);
+        if (ok) { bootScr.style.display = "none"; enterApp(); return; }
+        bootScr.style.display = "none";
+        showUnlockAfterFailedRestore();
+        return;
       }
       /* 库里还没有盐：若本机已初始化过，把本地盐推到库作为共享基准 */
       if (auth) {
@@ -65,19 +89,41 @@ async function boot() {
       console.warn("获取共享盐失败，回退本地逻辑", e);
     }
   }
-  if (!auth) { $("#unlockScr").style.display = "none"; $("#setupScr").style.display = "grid"; return; }
+  if (!auth) { bootScr.style.display = "none"; $("#setupScr").style.display = "grid"; return; }
   /* 尝试用 sessionStorage 恢复解锁态（刷新后免输密码） */
-  if (await tryRestoreSession()) {
-    try { DB = await store.load(KEY); }
-    catch (e) { clearSession(); KEY = null; $("#unlockScr").style.display = "grid"; return; }
-    enterApp(); return;
+  const ok = await restoreSession(store);
+  if (ok) { bootScr.style.display = "none"; enterApp(); return; }
+  bootScr.style.display = "none";
+  showUnlockAfterFailedRestore();
+}
+/* 恢复失败后的落地：若是网络类问题 → 保留密钥 + 给出「重试自动恢复」；否则回到常规解锁 */
+function showUnlockAfterFailedRestore() {
+  const u = $("#unlockScr");
+  u.style.display = "grid";
+  const keepKey = !!lastRestoreErr && !isKeyMismatch(lastRestoreErr) && !!sessionStorage.getItem(SKEY);
+  const btn = $("#retryAuto");
+  if (btn) btn.style.display = keepKey ? "block" : "none";
+  const err = $("#err");
+  if (keepKey) {
+    err.textContent = "网络异常，暂时无法加载数据（" + (lastRestoreErr.message || "未知错误") + "）。可点下方按钮重试，无需重输密码。";
+    err.classList.add("show");
   }
-  $("#unlockScr").style.display = "grid";
 }
 $("#suBtn").addEventListener("click", doSetup);
 $("#suPw2").addEventListener("keydown", e => { if (e.key === "Enter") doSetup(); });
 $("#unlockBtn").addEventListener("click", doUnlock);
 $("#master").addEventListener("keydown", e => { if (e.key === "Enter") doUnlock(); });
+/* 网络异常后的「重试自动恢复」：直接用 sessionStorage 里的密钥重试，不必重输主密码 */
+$("#retryAuto").addEventListener("click", async () => {
+  const btn = $("#retryAuto");
+  btn.disabled = true; btn.textContent = "正在重试…";
+  const { store } = getStore();
+  lastRestoreErr = null;
+  const ok = await restoreSession(store, 3);
+  if (ok) { $("#bootScr").style.display = "none"; enterApp(); return; }
+  btn.disabled = false; btn.textContent = "网络异常？点此重试自动恢复";
+  showUnlockAfterFailedRestore();
+});
 $("#eye").addEventListener("click", () => {
   const i = $("#master"); i.type = i.type === "password" ? "text" : "password";
 });
@@ -153,6 +199,7 @@ async function doUnlock() {
 
 function enterApp() {
   $("#setupScr").style.display = "none";
+  const bs = $("#bootScr"); if (bs) bs.style.display = "none";
   $("#unlockScr").classList.add("gone");
   $("#unlockScr").style.display = "grid";
   $("#app").classList.add("in");
@@ -166,6 +213,7 @@ function lock() {
   const u = $("#unlockScr");
   u.classList.remove("gone"); u.style.display = "grid";
   $("#master").value = ""; $("#err").classList.remove("show");
+  const ra = $("#retryAuto"); if (ra) ra.style.display = "none";   // 主动锁定后没有可用会话，关掉重试入口
   u.classList.remove("shake");
   /* 重置解锁按钮：上次解锁成功后按钮停留在「解锁中…」禁用态，不重置则锁定后再也无法点击 */
   const b = $("#unlockBtn");
@@ -795,4 +843,8 @@ function toast(msg) {
   clearTimeout(toastT); toastT = setTimeout(() => $("#toast").classList.remove("show"), 1800);
 }
 
-boot();
+boot().catch(e => {
+  console.error("启动失败", e);
+  const b = $("#bootScr"); if (b) b.style.display = "none";
+  const u = $("#unlockScr"); if (u) u.style.display = "grid";
+});
