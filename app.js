@@ -281,14 +281,17 @@ async function persist() {
   await store.save(KEY, DB);
 }
 /* ---------- 快路径持久化（避免全量重存导致交互卡顿） ----------
- * apisql：只 upsert 受影响的条目 + 分类 diff（各 1~N 次轻量请求）；
+ * apisql：只 upsert 受影响的条目（每批 5 条并发，压平串行等待）；
+ *         分类不再无条件同步——syncCats 内部按缓存 diff，无变化零请求。
  * local  ：整包加密存（同步、极快），行为与原来一致。
  * ----------------------------------------------------------- */
 async function persistEntries(list) {
   const { store, mode } = getStore();
   if (mode === "apisql") {
-    for (const e of list) await store.saveEntry(KEY, e);
-    await store.syncCats(DB.cats);
+    const CONC = 5;
+    for (let i = 0; i < list.length; i += CONC) {
+      await Promise.all(list.slice(i, i + CONC).map(e => store.saveEntry(KEY, e)));
+    }
   } else {
     await persist();
   }
@@ -633,7 +636,9 @@ async function startRename(c) {
       const affected = DB.entries.filter(e => e.cat === c);
       affected.forEach(e => { e.cat = v; });
       /* 只重存受影响的条目 + 分类 diff（cat_save 新名 + cat_delete 旧名） */
-      await persistEntries(affected); toast("已重命名");
+      await persistEntries(affected);
+      await persistCats();   // 重命名改了 DB.cats，需显式同步分类（persistEntries 不再顺带做）
+      toast("已重命名");
     }
     renderView();
   };
