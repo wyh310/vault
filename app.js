@@ -580,14 +580,26 @@ function showModal() { $("#scrim").classList.add("show"); $("#modal").classList.
 function closeModal() { $("#scrim").classList.remove("show"); $("#modal").classList.remove("show"); }
 $("#scrim").addEventListener("click", closeModal);
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
-/* 移动端：拦截双指缩放（iOS 视觉视口平移后无滚动边界、拉不回来），个人工具可接受禁用页面缩放
- * gesturestart 在部分 iOS 第三方浏览器不触发；touchmove 双指兜底更可靠（必须 passive:false）。
- * 另：iOS 不把 html/body 的 overflow:hidden 当「禁止文档拖动」，会整页平移——
- *     这里按触摸目标分流：在真正可滚动的容器（列表/弹窗/下拉）内放行，其余一律禁止默认拖动。 */
+/* 移动端：禁用整页平移 / 双指缩放（个人工具，可接受锁死页面级手势）
+ * iOS 不把 html/body 的 overflow:hidden 当「禁止文档拖动」，且短列表/边界处即使落在可滚容器里
+ * 也会被当成整页平移——所以这里按「手势方向 + 容器是否真能朝该方向滚」精确放行，其余一律拦死。 */
 document.addEventListener("gesturestart", e => e.preventDefault());
+let _ty = 0, _tx = 0;
+document.addEventListener("touchstart", e => { _ty = e.touches[0].clientY; _tx = e.touches[0].clientX; }, { passive: true });
 document.addEventListener("touchmove", e => {
-  if (e.touches.length > 1) { e.preventDefault(); return; }                    // 双指缩放
-  if (!e.target.closest(".content,.modal,.cf-menu,.dd-menu,.sidebar")) e.preventDefault(); // 文档级拖动
+  if (e.touches.length > 1) { e.preventDefault(); return; }                 // 双指缩放
+  const el = e.target.closest(".content,.modal,.cf-menu,.dd-menu,.sidebar");
+  if (!el) { e.preventDefault(); return; }                                  // 落点在可滚容器外 → 整页平移，拦
+  const canY = el.scrollHeight > el.clientHeight + 1;                       // 该容器纵向是否真能滚动
+  const canX = el.scrollWidth  > el.clientWidth  + 1;                       // 横向（弹窗/下拉一般无）
+  const dy = e.touches[0].clientY - _ty, dx = e.touches[0].clientX - _tx;   // 本帧相对起点位移
+  if (!canY && !canX) { e.preventDefault(); return; }                      // 根本滚不动 → 放行即变整页平移，拦
+  if (Math.abs(dx) > Math.abs(dy)) {                                        // 横向手势
+    if (!canX || (dx > 0 && el.scrollLeft <= 0) || (dx < 0 && el.scrollLeft >= el.scrollWidth - el.clientWidth - 1)) { e.preventDefault(); return; }
+  } else {                                                                  // 纵向手势
+    if (!canY || (dy > 0 && el.scrollTop <= 0) || (dy < 0 && el.scrollTop >= el.scrollHeight - el.clientHeight - 1)) { e.preventDefault(); return; }
+  }
+  // 其余：容器确实能朝该方向滚动且未到边界 → 放行，正常滚动
 }, { passive: false });
 
 /* 详情弹窗底部：默认态（编辑/删除）与删除确认态（取消/确认删除） */
