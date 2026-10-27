@@ -344,27 +344,33 @@ input,select,textarea{font-family:inherit}
 @media (max-width:760px){
   /* 问题A：所有输入框字号统一 16px，根治 iOS 聚焦自动放大（保留各自高度/padding） */
   input,textarea{font-size:16px}
-  /* ===== 移动端滚动模型：文档自然滚动 + 顶栏吸顶（v3，替代锁死视口方案） =====
-     用 overflow-x:clip + overflow-y:visible：横向裁掉（杜绝左右拖动），纵向保持可见
-     （文档原生滚动、position:sticky 不被破坏）；clip 不会把另一轴提升为 auto。 */
-  html{height:auto;overflow-x:clip;overflow-y:visible}
-  body{height:auto;min-height:100vh;min-height:100svh;overflow-x:clip;overflow-y:visible}
-  .app{height:auto;min-height:100vh;min-height:100svh}
-  .main{min-height:100vh;min-height:100svh}
+  /* ===== 移动端标准 app-shell：锁文档 + 内部滚动 + 顶栏安全区 =====
+     body 固定铺满视口（文档层不可平移），只有 .content 内部滚动；
+     overscroll-behavior:contain 吸收 iOS 橡皮筋，不让回弹传导到整页。
+     viewport-fit=cover（index.html meta）让 env(safe-area-inset-*) 生效，顶栏避开地址栏/刘海。 */
+  html{position:fixed;inset:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
+  body{position:fixed;inset:0;width:100%;height:100%;overflow:hidden;overscroll-behavior:none}
+  .app{height:100%}
+  .main{height:100%;display:flex;flex-direction:column;min-width:0}
   .topbar{
-    position:sticky;top:0;z-index:20;
+    position:sticky;top:0;z-index:20;flex:none;
+    padding-top:calc(12px + env(safe-area-inset-top));
+    padding-bottom:6px;gap:8px;height:auto;
     background:rgba(244,244,243,.94);
     -webkit-backdrop-filter:saturate(180%) blur(12px);
     backdrop-filter:saturate(180%) blur(12px);
     border-bottom:1px solid rgba(229,229,226,.65);
   }
-  .content{overflow:visible;padding-bottom:calc(28px + env(safe-area-inset-bottom))}
+  .content{
+    flex:1;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;-webkit-overflow-scrolling:touch;
+    padding:14px 16px calc(28px + env(safe-area-inset-bottom));
+  }
 
   .sidebar{position:fixed;left:0;top:0;bottom:0;z-index:30;transform:translateX(-100%);transition:.4s var(--ease)}
   .sidebar.open{transform:none;box-shadow:var(--shadow)}
   .side-mask{display:block;position:fixed;inset:0;z-index:29;background:rgba(20,20,18,.35);opacity:0;visibility:hidden;transition:.35s var(--ease)}
   .sidebar.open~.side-mask,.side-mask.show{opacity:1;visibility:visible}
-  .topbar{padding:12px 12px 6px;gap:8px;height:60px}
+  .topbar{height:auto}
   .search{min-width:0;flex:1;max-width:none}
   .search input{height:40px;font-size:13.5px}
   .cf-btn{height:40px;padding:0 12px;font-size:13px;gap:6px}
