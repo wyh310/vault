@@ -601,6 +601,18 @@ document.addEventListener("touchmove", e => {
   }
   // 其余：容器确实能朝该方向滚动且未到边界 → 放行，正常滚动
 }, { passive: false });
+/* 视口归位：拦死触摸后，键盘弹出/历史偏移会把视觉视口卡在错位处且无法拖回，
+ * 这里一旦发现视口偏移（顶部内容被顶出屏幕）立即拉回原点 */
+(function () {
+  const rs = () => window.scrollTo(0, 0);
+  window.addEventListener("pageshow", rs);
+  window.addEventListener("resize", rs);
+  window.addEventListener("focus", rs, true);
+  if (window.visualViewport) {
+    window.visualViewport.addEventListener("resize", rs);
+    window.visualViewport.addEventListener("scroll", rs);
+  }
+})();
 
 /* 详情弹窗底部：默认态（编辑/删除）与删除确认态（取消/确认删除） */
 function detailFootHTML(confirming) {
