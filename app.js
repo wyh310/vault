@@ -580,8 +580,10 @@ function showModal() { $("#scrim").classList.add("show"); $("#modal").classList.
 function closeModal() { $("#scrim").classList.remove("show"); $("#modal").classList.remove("show"); }
 $("#scrim").addEventListener("click", closeModal);
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
-/* 移动端：拦截双指缩放（iOS 视觉视口平移后无滚动边界、拉不回来），个人工具可接受禁用页面缩放 */
+/* 移动端：拦截双指缩放（iOS 视觉视口平移后无滚动边界、拉不回来），个人工具可接受禁用页面缩放
+ * gesturestart 在部分 iOS 第三方浏览器不触发；touchmove 双指兜底更可靠（必须 passive:false） */
 document.addEventListener("gesturestart", e => e.preventDefault());
+document.addEventListener("touchmove", e => { if (e.touches.length > 1) e.preventDefault(); }, { passive: false });
 
 /* 详情弹窗底部：默认态（编辑/删除）与删除确认态（取消/确认删除） */
 function detailFootHTML(confirming) {
