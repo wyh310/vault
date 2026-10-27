@@ -1,0 +1,26 @@
+# Cloudflare Pages 自定义响应头（部署根目录原生支持）
+# HTML：每次使用前必须向服务器校验新鲜度（配合 ETag 返回 304，开销极小）——根治"浏览器缓存旧页面"
+# JS/CSS：内容带 ?v= 版本号，版本变了 URL 就变 → 可放心永久缓存（二次打开秒加载）
+/*
+  Cache-Control: no-cache, must-revalidate
+
+/styles.css
+  Cache-Control: public, max-age=31536000, immutable
+
+/app.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/api.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/crypto.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/passkey.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/config.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/worker.js
+  Cache-Control: public, max-age=31536000, immutable
