@@ -281,17 +281,14 @@ async function persist() {
   await store.save(KEY, DB);
 }
 /* ---------- 快路径持久化（避免全量重存导致交互卡顿） ----------
- * apisql：只 upsert 受影响的条目（每批 5 条并发，压平串行等待）；
- *         分类不再无条件同步——syncCats 内部按缓存 diff，无变化零请求。
+ * apisql：只 upsert 受影响的条目（逐条串行保存）；分类不再无条件同步——
+ *         syncCats 内部按缓存 diff，无变化零请求。
  * local  ：整包加密存（同步、极快），行为与原来一致。
  * ----------------------------------------------------------- */
 async function persistEntries(list) {
   const { store, mode } = getStore();
   if (mode === "apisql") {
-    const CONC = 5;
-    for (let i = 0; i < list.length; i += CONC) {
-      await Promise.all(list.slice(i, i + CONC).map(e => store.saveEntry(KEY, e)));
-    }
+    for (const e of list) await store.saveEntry(KEY, e);
   } else {
     await persist();
   }
