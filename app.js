@@ -599,34 +599,45 @@ function renderTrash() {
     <p class="view-sub">删除的条目会先进入这里，可随时恢复。</p>
     ${page.length ? `<div class="grid">${page.map(trashCardHTML).join("")}</div>${pagerHTML(total)}`
       : emptyHTML("回收站是空的", "删除的密码会暂时保存在此。")}`;
-  bindEntryBtns(); bindPager();
+  bindEntryBtns(); bindCards(); bindPager();
   $$("[data-restore]").forEach(b => b.addEventListener("click", async () => {
     const e = DB.entries.find(x => x.id === b.dataset.restore);
     if (!e || restoring.has(e.id)) return;
     restoring.add(e.id);
+    /* 恢复加载态：按钮转圈+禁用；完成/失败都会 renderView 重建卡片，自动复位 */
+    b.disabled = true; b.innerHTML = '<span class="spin-sm"></span>';
     e.deleted = false;
     try { await persistEntry(e); renderView(); toast("已恢复"); }
     catch (err) { e.deleted = true; renderView(); toast("恢复失败：" + (err.message || "网络错误")); }
     finally { restoring.delete(e.id); }
   }));
-  $$("[data-purge]").forEach(b => b.addEventListener("click", async () => {
+  $$("[data-purge]").forEach(b => b.addEventListener("click", () => {
     const id = b.dataset.purge;
     const e = DB.entries.find(x => x.id === id);
     if (!e || purging.has(id)) return;
-    purging.add(id);
-    DB.entries = DB.entries.filter(x => x.id !== id);
-    try {
-      /* apisql：尽量物理删除线上行（需 entry_purge 接口）；local：整包已存 */
-      const { store, mode } = getStore();
-      if (mode === "apisql" && store.purgeEntry) {
-        try { await store.purgeEntry(KEY, id); }
-        catch (perr) { toast("本地已删除；线上清理失败（需在平台建 entry_purge 接口）"); }
-      } else await persist();
-      renderView(); toast("已永久删除");
-    } catch (err) {
-      DB.entries.push(e); renderView(); toast("删除失败：" + (err.message || "网络错误"));
-    } finally { purging.delete(id); }
+    /* 二次确认：永久删除不可恢复 */
+    confirmDialog("永久删除", "确定要永久删除「" + (e.name || "该条目") + "」吗？此操作不可恢复。", "永久删除", () => doPurge(id));
   }));
+}
+/* 回收站永久删除（经二次确认后执行） */
+async function doPurge(id) {
+  const e = DB.entries.find(x => x.id === id);
+  if (!e || purging.has(id)) return;
+  purging.add(id);
+  const btn = $('[data-purge="' + id + '"]');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin-sm"></span>'; }
+  DB.entries = DB.entries.filter(x => x.id !== id);
+  try {
+    /* apisql：尽量物理删除线上行（需 entry_purge 接口）；local：整包已存 */
+    const { store, mode } = getStore();
+    if (mode === "apisql" && store.purgeEntry) {
+      try { await store.purgeEntry(KEY, id); }
+      catch (perr) { toast("本地已删除；线上清理失败（需在平台建 entry_purge 接口）"); }
+    } else await persist();
+    renderView(); toast("已永久删除");
+  } catch (err) {
+    DB.entries.push(e); renderView(); toast("删除失败：" + (err.message || "网络错误"));
+  } finally { purging.delete(id); }
 }
 
 /* ---------------- 分类管理（扁平，无子分类） ---------------- */
@@ -823,6 +834,17 @@ async function changeMasterPassword(cur, np1) {
 /* ---------------- 弹窗 ---------------- */
 function showModal() { $("#scrim").classList.add("show"); $("#modal").classList.add("show"); }
 function closeModal() { $("#scrim").classList.remove("show"); $("#modal").classList.remove("show"); }
+/* 通用二次确认弹窗（回收站永久删除等不可恢复操作）。onOk 在用户点确认后执行 */
+function confirmDialog(title, msg, okText, onOk) {
+  $("#modal").innerHTML = `
+    <div class="mh"><div><div class="t">${esc(title)}</div></div>
+      <button class="x" onclick="closeModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:18px;height:18px"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="mb"><p class="view-sub" style="margin:0">${esc(msg)}</p></div>
+    <div class="mfoot"><button class="b-ghost" onclick="closeModal()">取消</button>
+      <button class="b-edit danger" id="cfmOk">${esc(okText)}</button></div>`;
+  showModal();
+  $("#cfmOk").addEventListener("click", () => { closeModal(); onOk(); });
+}
 $("#scrim").addEventListener("click", closeModal);
 document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
 /* 移动端：仅禁双指缩放（gesturestart + 双指 touchmove 兜底）。
