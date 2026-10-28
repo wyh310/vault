@@ -246,6 +246,11 @@ input,select,textarea{font-family:inherit}
 .b-edit.loading{opacity:.75;pointer-events:none}
 .b-edit.loading::before{content:"";display:inline-block;width:14px;height:14px;margin-right:var(--sp-2);vertical-align:-2px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:vspin .7s linear infinite}
 @keyframes vspin{to{transform:rotate(360deg)}}
+/* 危险操作按钮（永久删除等确认弹窗） */
+.b-edit.danger{background:#c0392b;border-color:#c0392b;color:#fff}
+.b-edit.danger:hover{opacity:.9}
+/* 行内小转圈（回收站恢复/删除按钮的 loading 态） */
+.spin-sm{width:14px;height:14px;border:2px solid currentColor;border-top-color:transparent;border-radius:50%;display:inline-block;animation:vspin .7s linear infinite}
 /* 启动加载层（刷新时自动恢复会话） */
 .boot-spinner{width:34px;height:34px;margin:0 auto var(--sp-4);border-radius:50%;border:3px solid var(--line);border-top-color:var(--text);animation:vspin .8s linear infinite}
 .retry-auto{display:block;width:100%;margin-top:var(--sp-2);height:40px;border-radius:var(--r-sm);font-size:var(--fs-md);font-weight:600;color:var(--muted);background:var(--card);border:1px solid var(--line);transition:.25s}
