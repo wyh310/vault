@@ -170,6 +170,8 @@ input,select,textarea{font-family:inherit}
   background-image:linear-gradient(rgba(0,0,0,.045) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.045) 1px,transparent 1px);
   background-size:44px 44px;transition:opacity .55s var(--ease),visibility .55s}
 .unlock.gone{opacity:0;visibility:hidden}
+/* 启动加载层永远盖在所有解锁屏之上（否则解锁页会把它挡住，面容解锁时看不到 loading） */
+#bootScr{z-index:70;}
 .lock-card{width:min(400px,100%);text-align:center;border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--sp-7) var(--sp-6) var(--sp-6);background:var(--card);box-shadow:var(--shadow)}
 .lock-badge{width:64px;height:64px;margin:0 auto var(--sp-4);border-radius:var(--r-lg);display:grid;place-items:center;background:var(--primary);color:#fff}
 .lock-badge svg{width:30px;height:30px}
