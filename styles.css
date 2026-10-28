@@ -83,7 +83,10 @@ input,select,textarea{font-family:inherit}
 .btn-add:hover{opacity:.85}
 .btn-add svg{width:16px;height:16px}
 
-.content{flex:1;overflow:auto;overflow-x:hidden;overscroll-behavior:none;padding:var(--sp-6) var(--sp-5) var(--sp-7)}
+.content{flex:1;overflow:auto;overflow-x:hidden;overscroll-behavior:none;padding:var(--sp-6) var(--sp-5) var(--sp-7);display:flex;flex-direction:column}
+/* 分页固定在内容区可视底部：条目少时也钉在底边，条目多时随滚动排在列表之后 */
+.content > .pager{margin-top:auto;padding-top:var(--sp-4)}
+.content > .grid{flex:none}
 .content::-webkit-scrollbar{width:8px}
 .content::-webkit-scrollbar-thumb{background:var(--line);border-radius:var(--r-sm)}
 .view-head{display:flex;align-items:baseline;gap:var(--sp-3);margin-bottom:var(--sp-1)}
