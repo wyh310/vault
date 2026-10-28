@@ -70,5 +70,20 @@ const VaultPasskey = (() => {
     return crypto.subtle.importKey("raw", raw, { name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]);
   }
 
-  return { available, isEnabled, enable, unlock, disable };
+  /* 主密码变更后：用已存在的 passkey（不新建凭证）重新包裹「新主密钥」。
+     需再次 Face ID 验证（userVerification=required）。包裹失败由调用方关闭面容解锁，
+     否则旧包裹仍在、Face ID 会解回旧密钥而打不开新数据。 */
+  async function rewrap(key) {
+    const box = JSON.parse(localStorage.getItem(LS) || "null");
+    if (!box) throw new Error("尚未开启面容解锁");
+    const prfOut = await prfGet(ub64u(box.credId));
+    const wk = await crypto.subtle.importKey("raw", prfOut, { name: "AES-GCM", length: 256 }, false, ["encrypt"]);
+    const raw = await VaultCrypto.exportRaw(key);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, wk, raw);
+    localStorage.setItem(LS, JSON.stringify({ credId: box.credId, iv: b64u(iv), ct: b64u(ct) }));
+    return true;
+  }
+
+  return { available, isEnabled, enable, unlock, rewrap, disable };
 })();
