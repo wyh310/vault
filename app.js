@@ -503,6 +503,13 @@ function cardHTML(e) {
     </div></div>`;
 }
 function bindCards() {
+  /* iOS 固定布局下：点卡片/按钮会被聚焦并触发容器内自动滚动，
+     与展开动画互相拉扯表现为「聚焦来回跑」。阻止 mousedown 默认聚焦即可消除，
+     click 事件仍正常触发（展开/复制/编辑都不受影响），键盘 Tab 聚焦不受影响。 */
+  $$(".card").forEach(c => c.addEventListener("mousedown", e => {
+    if (e.target.closest("input,textarea,select")) return;   // 输入框保持原生聚焦
+    e.preventDefault();
+  }));
   $$(".card").forEach(c => c.addEventListener("click", ev => {
     /* 点击账号/密码按钮、收藏、详情、回收站操作 → 不触发展开；其余点击卡片 → 展开/收起 */
     if (ev.target.closest(".icbtn") || ev.target.closest(".usr") ||
