@@ -162,13 +162,16 @@ $("#faceBtn").addEventListener("click", () => {
   $("#bootTitle").textContent = "面容解锁中";
   $("#bootMsg").textContent = "验证通过后正在解密并加载数据…";
   $("#bootScr").style.display = "grid";
+  /* 提前并行拉库：网络请求不需要密钥，趁 Face ID 弹窗期间就把数据拉回来，
+     验证通过只剩本地解密，整体解锁更快（apisql 模式省约一次完整往返） */
+  const { store } = getStore();
+  const prefetch = (typeof store.prefetch === "function") ? store.prefetch() : null;
   /* 关键：原生面容弹窗会阻塞主线程渲染。先等浏览器把 loading 层画出来（双 rAF），
      再触发 navigator.credentials.get，否则弹窗瞬间盖住、连一闪的 loading 都看不到 */
   requestAnimationFrame(() => requestAnimationFrame(async () => {
     try {
       KEY = await VaultPasskey.unlock();
-      const { store } = getStore();
-      DB = await store.load(KEY);
+      DB = await store.load(KEY, prefetch);
       await saveSession(KEY);
       /* 归一化 cats：与 doUnlock 保持一致 */
       DB.cats = (DB.cats || []).map(c => typeof c === "string" ? c : (c && c.name) || "").filter(Boolean);
