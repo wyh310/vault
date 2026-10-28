@@ -678,8 +678,7 @@ async function startRename(c) {
   const item = $(`.cat-item[data-cat="${CSS.escape(c)}"]`);
   item.innerHTML = `
     <input value="${esc(c)}" id="renInput" />
-    <span class="cc">回车确认，Esc 取消</span>
-    <div class="ops"><button id="renOk">确定</button></div>`;
+    <div class="ren-btns"><button id="renOk" class="ren-ok">确定</button><button id="renCancel" class="ren-cancel">取消</button></div>`;
   const input = $("#renInput"); input.focus(); input.select();
   const done = async ok => {
     const v = input.value.trim();
@@ -696,6 +695,7 @@ async function startRename(c) {
     renderView();
   };
   $("#renOk").addEventListener("click", () => done(true));
+  $("#renCancel").addEventListener("click", () => done(false));
   input.addEventListener("keydown", e => {
     if (e.key === "Enter") done(true);
     if (e.key === "Escape") done(false);
