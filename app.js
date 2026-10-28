@@ -154,31 +154,35 @@ function refreshFaceBtn() {
     $("#faceBtn").style.display = (ok && VaultPasskey.isEnabled()) ? "flex" : "none";
   }).catch(() => {});
 }
-$("#faceBtn").addEventListener("click", async () => {
+$("#faceBtn").addEventListener("click", () => {
   const btn = $("#faceBtn");
   if (btn.classList.contains("loading")) return;      // 防重复触发
   btn.classList.add("loading");
   /* Face ID 通过后还有解包 + 拉库两步，期间用启动加载层给反馈 */
   $("#bootTitle").textContent = "面容解锁中";
-  $("#bootMsg").textContent = "正在解密并加载数据…";
+  $("#bootMsg").textContent = "验证通过后正在解密并加载数据…";
   $("#bootScr").style.display = "grid";
-  try {
-    KEY = await VaultPasskey.unlock();
-    const { store } = getStore();
-    DB = await store.load(KEY);
-    await saveSession(KEY);
-    /* 归一化 cats：与 doUnlock 保持一致 */
-    DB.cats = (DB.cats || []).map(c => typeof c === "string" ? c : (c && c.name) || "").filter(Boolean);
-    enterApp();
-  } catch (e) {
-    $("#bootScr").style.display = "none";
-    btn.classList.remove("loading");
-    const err = $("#err");
-    const msg = /NotAllowed|用户取消|cancelled|canceled/i.test(e.name + " " + (e.message || "")) ? "已取消面容验证。"
-      : "面容解锁失败：" + (e.message || e.name || "未知错误") + "（可改用主密码解锁）";
-    err.textContent = msg; err.classList.add("show");
-    setTimeout(() => err.classList.remove("show"), 5000);
-  }
+  /* 关键：原生面容弹窗会阻塞主线程渲染。先等浏览器把 loading 层画出来（双 rAF），
+     再触发 navigator.credentials.get，否则弹窗瞬间盖住、连一闪的 loading 都看不到 */
+  requestAnimationFrame(() => requestAnimationFrame(async () => {
+    try {
+      KEY = await VaultPasskey.unlock();
+      const { store } = getStore();
+      DB = await store.load(KEY);
+      await saveSession(KEY);
+      /* 归一化 cats：与 doUnlock 保持一致 */
+      DB.cats = (DB.cats || []).map(c => typeof c === "string" ? c : (c && c.name) || "").filter(Boolean);
+      enterApp();
+    } catch (e) {
+      $("#bootScr").style.display = "none";
+      btn.classList.remove("loading");
+      const err = $("#err");
+      const msg = /NotAllowed|用户取消|cancelled|canceled/i.test(e.name + " " + (e.message || "")) ? "已取消面容验证。"
+        : "面容解锁失败：" + (e.message || e.name || "未知错误") + "（可改用主密码解锁）";
+      err.textContent = msg; err.classList.add("show");
+      setTimeout(() => err.classList.remove("show"), 5000);
+    }
+  }));
 });
 $("#unlockBtn").addEventListener("click", doUnlock);
 $("#master").addEventListener("keydown", e => { if (e.key === "Enter") doUnlock(); });
