@@ -138,7 +138,10 @@ const LocalStore = {
     return this.save(key, allData);
   },
 
-  async syncCats() { /* local 无分类表，整包已含 */ }
+  async syncCats() { /* local 无分类表，整包已含 */ },
+
+  /* 本地模式无网络，预拉取为空操作（面容解锁逻辑统一调用，不报错） */
+  prefetch() { return null; }
 };
 
 /* ---------- 多端共享盐（仅 apisql 用） ----------
@@ -177,8 +180,15 @@ function createApisqlStore(cfg) {
   const E = cfg.endpoints, FAV_ON = 1, FAV_OFF = 2, DEL_YES = 1, DEL_NO = 2;
   let catCache = null;   // 远端分类缓存：load 时建立，syncCats 以此为 diff 基准（省一次 cat_list 往返）
   return {
-    async load(key) {
-      const rows = await apiCall(cfg, E.list);
+      /* 预拉取：点击面容解锁时即并行发起（网络请求不需要密钥），
+       返回未 await 的 promise 对，由 load(key, prefetch) 复用，省掉一次完整往返。 */
+    prefetch() {
+      return { list: apiCall(cfg, E.list), cats: apiCall(cfg, E.cats) };
+    },
+    async load(key, prefetch) {
+      const listP = (prefetch && prefetch.list) ? prefetch.list : apiCall(cfg, E.list);
+      const catsP = (prefetch && prefetch.cats) ? prefetch.cats : apiCall(cfg, E.cats);
+      const [rows, catRows] = await Promise.all([listP, catsP]);
       const entries = [];
       let broken = 0;
       for (const r of rows) {
@@ -199,7 +209,7 @@ function createApisqlStore(cfg) {
           fav: r.fav === FAV_ON, deleted: r.deleted === DEL_YES, updated_at: toLocalDT(r.updated_at) });
       }
       if (broken) setTimeout(() => toast(`有 ${broken} 条数据与当前主密码不匹配，已跳过（旧密文无法解密，可在数据库中清理）`), 600);
-      const cats = (await apiCall(cfg, E.cats)).map(r => r.name);
+      const cats = catRows.map(r => r.name);
       catCache = cats;                                    // 首次加载缓存远端分类，后续 syncCats 以此为基准
       return { entries, cats };
     },
