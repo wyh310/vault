@@ -696,6 +696,9 @@ function renderSettings() {
       <div class="set"><div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 8V6a2 2 0 0 1 2-2h2M16 4h2a2 2 0 0 1 2 2v2M20 16v2a2 2 0 0 1-2 2h-2M8 20H6a2 2 0 0 1-2-2v-2"/><path d="M8.5 10v1.5M15.5 10v1.5M12 10v3h-1"/><path d="M8.8 15.5c.9.9 2 1.4 3.2 1.4s2.3-.5 3.2-1.4"/></svg></div>
         <div class="st"><b>面容 / Passkey 快速解锁</b><small id="faceSub"></small></div>
         <button class="switch" id="faceSwitch" style="flex:none"><i></i></button></div>
+      <div class="set"><div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.3" r="1.5"/></svg></div>
+        <div class="st"><b>修改主密码</b><small>修改后所有数据用新密码重新加密</small></div>
+        <button class="b-ghost" id="chgPwBtn" style="flex:none;padding:9px 16px;height:auto">修改</button></div>
       <div class="set"><div class="si"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3v12M12 15l-4-4M12 15l4-4M4 21h16"/></svg></div>
         <div class="st"><b>导出备份</b><small>下载加密数据包（仍需主密码才能解密）</small></div>
         <button class="b-ghost" style="flex:none;padding:9px 16px;height:auto" id="exportBtn">导出</button></div>
@@ -711,6 +714,7 @@ function renderSettings() {
     a.href = URL.createObjectURL(blob); a.download = "vault-backup.json"; a.click();
     toast("已导出加密备份");
   });
+  $("#chgPwBtn").addEventListener("click", openChangePw);
   /* 面容 / Passkey 快速解锁：开关状态 + 开启/关闭逻辑 */
   (async () => {
     const sw = $("#faceSwitch"), sub = $("#faceSub");
@@ -741,6 +745,69 @@ function renderSettings() {
       }
     });
   })();
+}
+
+/* ---------------- 修改主密码 ----------------
+ * 流程：校验当前密码 → 用新密码派生新密钥 → 用新密钥重加密全部数据落库 →
+ *       更新本地/远端 salt+verifier → 重包裹 passkey（如已开启）→ 更新会话。
+ * 重加密依赖 store.save(KEY,DB)（两种模式都会按给定密钥重加密条目），无需逐条处理。 */
+function openChangePw() {
+  $("#modal").innerHTML = `
+    <div class="mh"><div><div class="t">修改主密码</div></div>
+      <button class="x" onclick="closeModal()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="width:18px;height:18px"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="mb">
+      <p class="view-sub" style="margin:0 0 14px">修改后所有数据都会用新密码重新加密。若已开启面容解锁，需再次验证以绑定新密码。</p>
+      <div class="fld"><label>当前主密码 *</label><input id="cpCur" type="password" placeholder="输入当前主密码" autocomplete="current-password" /></div>
+      <div class="fld"><label>新主密码 *</label><input id="cpNew" type="password" placeholder="至少 8 位" autocomplete="new-password" /></div>
+      <div class="fld"><label>确认新主密码 *</label><input id="cpNew2" type="password" placeholder="再次输入新主密码" autocomplete="new-password" /></div>
+      <div class="err" id="cpErr"></div>
+    </div>
+    <div class="mfoot"><button class="b-ghost" onclick="closeModal()">取消</button>
+      <button class="b-edit" id="cpSave">确认修改</button></div>`;
+  showModal();
+  const save = $("#cpSave"), err = $("#cpErr");
+  const fail = m => { save.disabled = false; save.classList.remove("loading"); save.textContent = "确认修改"; err.textContent = m; err.classList.add("show"); };
+  save.addEventListener("click", async () => {
+    if (save.disabled) return;
+    const cur = $("#cpCur").value, np1 = $("#cpNew").value, np2 = $("#cpNew2").value;
+    err.classList.remove("show"); err.textContent = "";
+    if (!cur || !np1 || !np2) return fail("请填写所有字段");
+    if (np1.length < 8) return fail("新主密码至少 8 位");
+    if (np1 !== np2) return fail("两次输入的新密码不一致");
+    save.disabled = true; save.classList.add("loading"); save.textContent = "加密中…";
+    try {
+      await changeMasterPassword(cur, np1, np2);
+      closeModal();
+      toast("主密码已修改，数据已用新密码重新加密");
+      renderSettings();
+    } catch (e) { fail(e.message || "修改失败"); }
+  });
+  $("#cpNew2").addEventListener("keydown", e => { if (e.key === "Enter") $("#cpSave").click(); });
+}
+async function changeMasterPassword(cur, np1) {
+  const auth = JSON.parse(localStorage.getItem("vault.auth") || "null");
+  if (!auth || !auth.salt || !auth.verifier) throw new Error("未初始化，无法修改主密码");
+  /* 1) 校验当前主密码 */
+  const curKey = await VaultCrypto.verify(cur, auth.salt, auth.verifier);
+  if (!curKey) throw new Error("当前主密码不正确");
+  /* 2) 派生新密钥 */
+  const { salt, verifier } = await VaultCrypto.setup(np1);
+  const newKey = await VaultCrypto.verify(np1, salt, verifier);
+  const { store, mode } = getStore();
+  /* 3) 先用新密钥重加密并落库（失败则整体不生效，避免半成品状态） */
+  KEY = newKey;
+  await store.save(newKey, DB);
+  /* 4) 落库成功 → 更新本地/远端 salt+verifier */
+  localStorage.setItem("vault.auth", JSON.stringify(Object.assign({}, auth, { salt, verifier })));
+  if (mode === "apisql") { try { await store.saveMeta(salt, verifier); } catch (e) { console.warn("共享盐写入失败", e); } }
+  /* 5) 面容解锁：用新密钥重新包裹现有 passkey（需再次 Face ID）；
+        包裹失败则关闭面容解锁，避免旧包裹解回旧密钥而打不开新数据 */
+  if (VaultPasskey.isEnabled()) {
+    try { await VaultPasskey.rewrap(newKey); }
+    catch (e) { VaultPasskey.disable(); toast("面容解锁因密码变更已关闭，请重新开启"); }
+  }
+  /* 6) 更新会话（新密钥） */
+  await saveSession(newKey);
 }
 
 /* ---------------- 弹窗 ---------------- */
