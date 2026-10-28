@@ -305,7 +305,13 @@ input,select,textarea{font-family:inherit}
 .sub-input input{flex:1;height:38px;border-radius:var(--r-sm);border:1px solid var(--line);background:var(--card-2);padding:0 var(--sp-3);font-size:var(--fs-md)}
 .sub-input input:focus{outline:none;border-color:var(--text)}
 .sub-input .sub-ok{height:38px;padding:0 var(--sp-4);border-radius:var(--r-sm);background:var(--primary);color:#fff;font-weight:600;font-size:var(--fs-md)}
-.cat-item input{height:36px;border:1px solid var(--text);border-radius:var(--r-sm);padding:0 var(--sp-2);font-size:var(--fs-md);width:180px}
+.cat-item input{height:36px;border:1px solid var(--text);border-radius:var(--r-sm);padding:0 var(--sp-2);font-size:var(--fs-md);width:180px;min-width:0;flex:1 1 140px}
+.cat-item .ren-btns{display:flex;gap:var(--sp-2);flex:none}
+.cat-item .ren-btns button{height:36px;padding:0 var(--sp-4);border-radius:var(--r-sm);font-size:var(--fs-sm);font-weight:600;white-space:nowrap}
+.cat-item .ren-btns .ren-ok{background:var(--text);color:var(--card);border:1px solid var(--text)}
+.cat-item .ren-btns .ren-ok:hover{opacity:.85}
+.cat-item .ren-btns .ren-cancel{background:var(--card);color:var(--text);border:1px solid var(--line)}
+.cat-item .ren-btns .ren-cancel:hover{border-color:var(--text)}
 
 /* settings */
 .set-list{display:flex;flex-direction:column;gap:var(--sp-3);max-width:640px}
