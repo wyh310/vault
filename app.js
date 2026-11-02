@@ -660,24 +660,27 @@ function renderTrash() {
     confirmDialog("永久删除", "确定要永久删除「" + (e.name || "该条目") + "」吗？此操作不可恢复。", "永久删除", () => doPurge(id));
   }));
 }
-/* 回收站永久删除（经二次确认后执行） */
+/* 回收站永久删除（经二次确认后执行）：先物理删除线上行，成功后才从本地移除，
+   避免「本地假删成功、线上行仍在、刷新又回来」的错觉。接口未建时明确报错而非假装成功。 */
 async function doPurge(id) {
   const e = DB.entries.find(x => x.id === id);
   if (!e || purging.has(id)) return;
   purging.add(id);
   const btn = $('[data-purge="' + id + '"]');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spin-sm"></span>'; }
-  DB.entries = DB.entries.filter(x => x.id !== id);
+  const { store, mode } = getStore();
   try {
-    /* apisql：尽量物理删除线上行（需 entry_purge 接口）；local：整包已存 */
-    const { store, mode } = getStore();
     if (mode === "apisql" && store.purgeEntry) {
-      try { await store.purgeEntry(KEY, id); }
-      catch (perr) { toast("本地已删除；线上清理失败（需在平台建 entry_purge 接口）"); }
-    } else await persist();
+      await store.purgeEntry(KEY, id);          // 先物理删除线上行（需 apiSQL 已建 entry_purge 接口）
+    } else {
+      await persist();                          // local 模式：整包已含（不含该条）数据
+    }
+    DB.entries = DB.entries.filter(x => x.id !== id);   // 线上成功后才从本地移除
     renderView(); toast("已永久删除");
   } catch (err) {
-    DB.entries.push(e); renderView(); toast("删除失败：" + (err.message || "网络错误"));
+    /* 线上删除失败（多为 entry_purge 接口未建 / 网络错）：保留本地，明确提示，不假装成功 */
+    if (btn) { btn.disabled = false; btn.innerHTML = I.trash; }
+    toast("删除失败：" + (err.message || "网络错误") + "（请确认 apiSQL 已建 entry_purge 接口：DELETE FROM pv_entry WHERE id=:id）");
   } finally { purging.delete(id); }
 }
 
@@ -705,7 +708,18 @@ function renderCats() {
   $$("[data-del]").forEach(b => b.addEventListener("click", async () => {
     const c = b.dataset.del;
     if (DB.entries.some(e => !e.deleted && e.cat === c)) return toast("该分类下仍有条目，无法删除");
-    DB.cats = DB.cats.filter(x => x !== c); await persistCats(); renderView(); toast("已删除分类");
+    if (b.classList.contains("loading")) return;
+    /* 二次确认 + 删除中 loading（红色危险按钮风格，与回收站 purge 一致） */
+    confirmDialog("删除分类", "确定要删除分类「" + c + "」吗？此操作不可恢复。", "删除", async () => {
+      b.classList.add("loading"); b.disabled = true; b.innerHTML = '<span class="spin-sm"></span>';
+      try {
+        DB.cats = DB.cats.filter(x => x !== c); await persistCats(); renderView(); toast("已删除分类");
+      } catch (err) {
+        b.classList.remove("loading"); b.disabled = false;
+        b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>';
+        toast("删除失败：" + (err.message || "网络错误"));
+      }
+    });
   }));
 }
 async function addCat() {
