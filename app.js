@@ -713,8 +713,19 @@ function renderCats() {
     confirmDialog("删除分类", "确定要删除分类「" + c + "」吗？此操作不可恢复。", "删除", async () => {
       b.classList.add("loading"); b.disabled = true; b.innerHTML = '<span class="spin-sm"></span>';
       try {
-        DB.cats = DB.cats.filter(x => x !== c); await persistCats(); renderView(); toast("已删除分类");
+        DB.cats = DB.cats.filter(x => x !== c);
+        await persistCats();
+        /* 删除后回查服务端：若分类仍在，说明 cat_delete 接口没真删（典型是接口 SQL 为 no-op
+           或 :name 参数未绑上），诚实报错而非假成功，避免「刷新又回来」 */
+        const { store, mode } = getStore();
+        if (mode === "apisql" && typeof store.listCatsRemote === "function") {
+          const stillThere = (await store.listCatsRemote()).includes(c);
+          if (stillThere) throw new Error("服务端未真正删除该分类：请在 apiSQL 把 cat_delete 接口 SQL 改为\nDELETE FROM pv_cat WHERE name = :name;\n（参数 name 类型选 string）");
+        }
+        renderView(); toast("已删除分类");
       } catch (err) {
+        /* 回滚本地删除，保持与后端一致 */
+        DB.cats.push(c);
         b.classList.remove("loading"); b.disabled = false;
         b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>';
         toast("删除失败：" + (err.message || "网络错误"));
