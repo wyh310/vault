@@ -63,50 +63,45 @@ async function boot() {
   const { mode, store } = getStore();
   MODE = mode;
   const tag = $("#storeTag"); if (tag) tag.textContent = mode === "apisql" ? "加密 · apiSQL + MySQL" : "加密 · 本机存储";
-  const auth = localStorage.getItem("vault.auth");
+  let auth = localStorage.getItem("vault.auth");
   const hasSession = !!sessionStorage.getItem(SKEY);   // 是否存在可静默恢复的会话
   const bootScr = $("#bootScr");
-  /* loading 只在两种情况出现：① 有会话可恢复（刷新场景）② 新设备需连库判定初始化。
-     已设主密码的常规进入 → 直接显示解锁页，不闪 loading */
+  /* 新设备/新域名（本地无初始化记录）需连库判定，显示 loading；已设主密码的常规进入不闪 */
   if (hasSession || !auth) {
     if (!hasSession) { $("#bootTitle").textContent = "加载中"; $("#bootMsg").textContent = "正在连接数据库…"; }
     bootScr.style.display = "grid";
   }
   $("#unlockScr").style.display = "none";
-  /* 多端同步：apisql 模式下盐以数据库 pv_meta 为准（保证各端/网址派生同一密钥） */
-  if (mode === "apisql" && (hasSession || !auth)) {
+
+  /* 多端/多域名共享盐：apisql 模式下盐以数据库 pv_meta 为准。
+     换了域名（localStorage 清空）也能从服务端取回同一把盐 → 直接走「解锁」而非「初始化」。
+     旧域名则把本地盐推到服务端（若服务端还没有），供其它端/域名共享。 */
+  if (mode === "apisql") {
     try {
-      const meta = await store.getMeta();
-      if (meta) {
-        /* 库里已有共享盐 → 以它为准覆盖本地，直接进入解锁页（不再「初始化」） */
-        localStorage.setItem("vault.auth", JSON.stringify({ salt: meta.salt, verifier: meta.verifier, shared: true }));
-        if (hasSession) {
-          const ok = await restoreSession(store);
-          bootScr.style.display = "none";
-          if (ok) { enterApp(); return; }
-          showUnlockAfterFailedRestore(); return;
-        }
-        bootScr.style.display = "none";
-        $("#unlockScr").style.display = "grid"; refreshFaceBtn(); return;   // 新设备无会话 → 直接解锁页
-      }
-      /* 库里还没有盐：若本机已初始化过，把本地盐推到库作为共享基准 */
-      if (auth) {
-        const a = JSON.parse(auth);
-        await store.saveMeta(a.salt, a.verifier);
+      if (!auth) {
+        const meta = await store.getMeta();            // 可能弹访问口令框；成功=库里已有共享盐
+        if (meta) localStorage.setItem("vault.auth", JSON.stringify({ salt: meta.salt, verifier: meta.verifier, shared: true }));
+      } else {
+        try {
+          const meta = await store.getMeta();
+          if (!meta) { const a = JSON.parse(auth); await store.saveMeta(a.salt, a.verifier); }
+        } catch (e) { console.warn("向服务端同步共享盐失败", e); }
       }
     } catch (e) {
       console.warn("获取共享盐失败，回退本地逻辑", e);
     }
   }
-  if (!auth) { bootScr.style.display = "none"; $("#setupScr").style.display = "grid"; return; }
-  if (hasSession) {   /* 本地模式恢复（或 apisql 取盐失败回退到本地） */
+
+  auth = localStorage.getItem("vault.auth");            // 上面可能已从服务端取回
+  if (hasSession) {
     const ok = await restoreSession(store);
     bootScr.style.display = "none";
     if (ok) { enterApp(); return; }
     showUnlockAfterFailedRestore(); return;
   }
   bootScr.style.display = "none";
-  $("#unlockScr").style.display = "grid"; refreshFaceBtn();
+  if (auth) { $("#unlockScr").style.display = "grid"; refreshFaceBtn(); }
+  else { $("#setupScr").style.display = "grid"; }
 }
 /* 恢复失败后的落地：若是网络类问题 → 保留密钥 + 给出「重试自动恢复」；否则回到常规解锁 */
 function showUnlockAfterFailedRestore() {
@@ -211,6 +206,21 @@ async function doSetup() {
   $("#suErr").classList.remove("show");
   if (p1.length < 8) return suErr("主密码至少 8 位。");
   if (p1 !== p2) return suErr("两次输入不一致。");
+  /* 安全护栏：apisql 模式下，若服务端已存在保险库（有共享盐或已有条目），
+     创建新库会用新密钥覆盖，可能导致旧密文无法解密。先确认，避免误点「创建」丢数据。 */
+  if (getStore().mode === "apisql") {
+    try {
+      const m = await getStore().store.getMeta();
+      let cnt = 0;
+      try { cnt = (await apiCall(window.VAULT_CONFIG.apisql, window.VAULT_CONFIG.apisql.endpoints.list)).length; } catch (e) {}
+      if (m || cnt > 0) {
+        if (!confirm("检测到服务端已有保险库数据。创建新保险库将用新密钥加密，旧数据可能无法解密。\n\n如你只是换了域名，请先在原域名打开一次以同步密钥，再回来解锁；确定要覆盖创建吗？")) {
+          $("#suBtn").textContent = "创建保险库"; $("#suBtn").disabled = false;
+          return;
+        }
+      }
+    } catch (e) { /* 取不到就跳过护栏，照常创建（首次初始化场景） */ }
+  }
   $("#suBtn").textContent = "正在派生密钥…";
   $("#suBtn").disabled = true;
   try {
