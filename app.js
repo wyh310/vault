@@ -79,11 +79,12 @@ async function boot() {
      避免误以为"要重设主密码"；仅当用正确访问口令仍取不到盐（真·首次使用）才走初始化。 */
   if (mode === "apisql") {
     if (!auth) {
-      let meta = null, denied = false, netErr = null;
-      for (let t = 0; t < 6; t++) {
+      let meta = null, denied = false, netErr = null, everNeededCode = false;
+      for (let t = 0; t < 8; t++) {
         try { meta = await store.getMetaOnce(); break; }   // 401 抛 needsCode，不自动弹框
         catch (e) {
           if (e && e.needsCode) {
+            everNeededCode = true;
             const code = await window.__askVaultCode(t ? "访问口令不正确，请重试" : "");
             if (!code) { denied = true; break; }
             try { localStorage.setItem("vault.acode", code); } catch (_) {}
@@ -104,7 +105,15 @@ async function boot() {
         $("#bootScr").style.display = "grid";
         return;
       }
-      if (meta) localStorage.setItem("vault.auth", JSON.stringify({ salt: meta.salt, verifier: meta.verifier, shared: true }));
+      /* 访问口令一直不正确（循环耗尽仍取不到盐）：明确告知，绝不退回「设置主密码」误导用户。
+         取消输入 → 上方 denied 分支；连续输错耗尽 → 此分支停在提示页，刷新可重试。 */
+      if (everNeededCode && !meta) {
+        $("#bootTitle").textContent = "访问口令不正确";
+        $("#bootMsg").textContent = "访问口令验证未通过，无法连接保险库。请刷新页面后重新输入正确的访问口令。";
+        $("#bootScr").style.display = "grid";
+        return;
+      }
+      if (meta && meta.salt) localStorage.setItem("vault.auth", JSON.stringify({ salt: meta.salt, verifier: meta.verifier, shared: true }));
     } else {
       /* 旧域名：本地已有记录 → 若服务端还没盐则把本地盐推上去，供其它域名共享 */
       try {
