@@ -261,7 +261,7 @@ function createApisqlStore(cfg) {
     },
     /* 写入共享盐（幂等，id 固定 1） */
     async saveMeta(salt, verifier) {
-      await apiCall(cfg, E.metaSave, { id: 1, salt, verifier });
+      await apiCall(cfg, E.metaSave, { salt, verifier });
     }
   };
 }
