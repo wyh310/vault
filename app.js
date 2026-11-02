@@ -75,20 +75,42 @@ async function boot() {
 
   /* 多端/多域名共享盐：apisql 模式下盐以数据库 pv_meta 为准。
      换了域名（localStorage 清空）也能从服务端取回同一把盐 → 直接走「解锁」而非「初始化」。
-     旧域名则把本地盐推到服务端（若服务端还没有），供其它端/域名共享。 */
+     关键：访问口令缺失/不正确时由 boot 持续向用户索取，绝不直接退回「初始化保险库」，
+     避免误以为"要重设主密码"；仅当用正确访问口令仍取不到盐（真·首次使用）才走初始化。 */
   if (mode === "apisql") {
-    try {
-      if (!auth) {
-        const meta = await store.getMeta();            // 可能弹访问口令框；成功=库里已有共享盐
-        if (meta) localStorage.setItem("vault.auth", JSON.stringify({ salt: meta.salt, verifier: meta.verifier, shared: true }));
-      } else {
-        try {
-          const meta = await store.getMeta();
-          if (!meta) { const a = JSON.parse(auth); await store.saveMeta(a.salt, a.verifier); }
-        } catch (e) { console.warn("向服务端同步共享盐失败", e); }
+    if (!auth) {
+      let meta = null, denied = false, netErr = null;
+      for (let t = 0; t < 6; t++) {
+        try { meta = await store.getMetaOnce(); break; }   // 401 抛 needsCode，不自动弹框
+        catch (e) {
+          if (e && e.needsCode) {
+            const code = await window.__askVaultCode(t ? "访问口令不正确，请重试" : "");
+            if (!code) { denied = true; break; }
+            try { localStorage.setItem("vault.acode", code); } catch (_) {}
+            continue;                                        // 用新口令重试
+          }
+          netErr = e; break;                                // 网络等错误：跳出，下方统一处理
+        }
       }
-    } catch (e) {
-      console.warn("获取共享盐失败，回退本地逻辑", e);
+      if (denied) {
+        $("#bootTitle").textContent = "无法访问保险库";
+        $("#bootMsg").textContent = "需要访问口令才能连接。请刷新页面后重新输入。";
+        $("#bootScr").style.display = "grid";
+        return;
+      }
+      if (netErr) {
+        $("#bootTitle").textContent = "连接失败";
+        $("#bootMsg").textContent = "无法连接服务器：" + (netErr.message || "网络错误") + "（已设主密码的话刷新重试）";
+        $("#bootScr").style.display = "grid";
+        return;
+      }
+      if (meta) localStorage.setItem("vault.auth", JSON.stringify({ salt: meta.salt, verifier: meta.verifier, shared: true }));
+    } else {
+      /* 旧域名：本地已有记录 → 若服务端还没盐则把本地盐推上去，供其它域名共享 */
+      try {
+        const meta = await store.getMeta();
+        if (!meta) { const a = JSON.parse(auth); await store.saveMeta(a.salt, a.verifier); }
+      } catch (e) { console.warn("向服务端同步共享盐失败", e); }
     }
   }
 
