@@ -247,6 +247,15 @@ function createApisqlStore(cfg) {
       }
       catCache = [...cats];
     },
+    /* 显式删除单个分类（删除分类专用，避免依赖 catCache diff 漏删） */
+    async deleteCategory(name) {
+      return apiCall(cfg, E.catDel, { name });
+    },
+    /* 重新拉取服务端分类名（删除后用于校验是否真删成功，防止接口 no-op 导致刷新又回来） */
+    async listCatsRemote() {
+      const rows = await apiCall(cfg, E.cats);
+      return rows.map(r => r.name);
+    },
     /* 物理删除（需平台建 entry_purge 接口；未建则抛错由调用方降级处理） */
     async purgeEntry(key, id) {
       if (!E.purge) throw new Error("未配置 entry_purge 接口");
