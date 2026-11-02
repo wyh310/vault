@@ -715,17 +715,19 @@ function renderCats() {
       try {
         DB.cats = DB.cats.filter(x => x !== c);
         await persistCats();
-        /* 删除后回查服务端：若分类仍在，说明 cat_delete 接口没真删（典型是接口 SQL 为 no-op
-           或 :name 参数未绑上），诚实报错而非假成功，避免「刷新又回来」 */
+        /* 删除后回查服务端：若分类仍在，说明 cat_delete 接口没真删（典型是接口 SQL 里 :name
+           参数未在「API参数」里声明导致绑定不上、删 0 行），诚实报错而非假成功，避免「刷新又回来」 */
         const { store, mode } = getStore();
         if (mode === "apisql" && typeof store.listCatsRemote === "function") {
           const stillThere = (await store.listCatsRemote()).includes(c);
-          if (stillThere) throw new Error("服务端未真正删除该分类：请在 apiSQL 把 cat_delete 接口 SQL 改为\nDELETE FROM pv_cat WHERE name = :name;\n（参数 name 类型选 string）");
+          if (stillThere) throw new Error("服务端未真正删除该分类：请检查 apiSQL 的 cat_delete 接口——\nSQL 应为 DELETE FROM pv_cat WHERE name = :name;\n且必须在「API参数」里添加参数 name（类型选 string），否则 :name 不绑定、删除 0 行。");
         }
         renderView(); toast("已删除分类");
       } catch (err) {
-        /* 回滚本地删除，保持与后端一致 */
+        /* 回滚本地删除，保持与后端一致；并清空分类缓存，下次重试走 cat_delete 而非 cat_save */
         DB.cats.push(c);
+        const { store } = getStore();
+        if (typeof store.invalidateCats === "function") store.invalidateCats();
         b.classList.remove("loading"); b.disabled = false;
         b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 7h16M9 7V5h6v2M6 7l1 13h10l1-13"/></svg>';
         toast("删除失败：" + (err.message || "网络错误"));
