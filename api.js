@@ -252,9 +252,17 @@ function createApisqlStore(cfg) {
       if (!E.purge) throw new Error("未配置 entry_purge 接口");
       await apiCall(cfg, E.purge, { id });
     },
-    /* 读取共享盐：无行返回 null（尚未初始化） */
+    /* 读取共享盐：无行返回 null（尚未初始化）。
+       getMeta 走 apiCall（401 会自动弹访问口令框、重试）；getMetaOnce 走 apiCallOnce，
+       401 直接抛 needsCode 而不自动弹框——由 boot 自行管理「索取访问口令」循环，避免重复弹框。 */
     async getMeta() {
       const rows = await apiCall(cfg, E.metaGet);
+      if (!rows.length) return null;
+      const r = rows[0];
+      return r.salt && r.verifier ? { salt: r.salt, verifier: r.verifier } : null;
+    },
+    async getMetaOnce() {
+      const rows = await apiCallOnce(cfg, E.metaGet);
       if (!rows.length) return null;
       const r = rows[0];
       return r.salt && r.verifier ? { salt: r.salt, verifier: r.verifier } : null;
