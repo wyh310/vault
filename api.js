@@ -140,6 +140,9 @@ const LocalStore = {
 
   async syncCats() { /* local 无分类表，整包已含 */ },
 
+  /* 本地模式无分类缓存，置空操作 */
+  invalidateCats() {},
+
   /* 本地模式无网络，预拉取为空操作（面容解锁逻辑统一调用，不报错） */
   prefetch() { return null; }
 };
@@ -256,6 +259,8 @@ function createApisqlStore(cfg) {
       const rows = await apiCall(cfg, E.cats);
       return rows.map(r => r.name);
     },
+    /* 删除失败后本地回滚时调用：清空分类缓存，下次同步重新拉取，避免 diff 误判把 cat_delete 当成 cat_save */
+    invalidateCats() { catCache = null; },
     /* 物理删除（需平台建 entry_purge 接口；未建则抛错由调用方降级处理） */
     async purgeEntry(key, id) {
       if (!E.purge) throw new Error("未配置 entry_purge 接口");
@@ -301,11 +306,18 @@ function seedEntries() {
 }
 
 /* ---------- 选择后端 ---------- */
+/* store 做成单例：createApisqlStore 内部以 catCache 缓存远端分类做 diff，
+   若每次 getStore() 都新建实例，catCache 永远为 null，syncCats 会退化成「全量重存所有分类」
+   （慢）且删除分支因 remote 为空永远不调 cat_delete（删不掉）。单例保证缓存跨 persist 复用。 */
+let _storeSingleton = null;
 function getStore() {
+  if (_storeSingleton) return _storeSingleton;
   const cfg = window.VAULT_CONFIG;
   const a = cfg.apisql || {};
   if (cfg.mode === "apisql" && (a.proxy || (a.base && a.key))) {
-    return { store: createApisqlStore(a), mode: "apisql" };
+    _storeSingleton = { store: createApisqlStore(a), mode: "apisql" };
+  } else {
+    _storeSingleton = { store: LocalStore, mode: "local" };
   }
-  return { store: LocalStore, mode: "local" };
+  return _storeSingleton;
 }
