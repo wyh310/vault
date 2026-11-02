@@ -175,6 +175,9 @@ input,select,textarea{font-family:inherit}
 .unlock.gone{opacity:0;visibility:hidden}
 /* 启动加载层永远盖在所有解锁屏之上（否则解锁页会把它挡住，面容解锁时看不到 loading） */
 #bootScr{z-index:70;}
+/* 访问口令弹窗必须盖在「加载中」层之上：新域名首访时先弹 401 口令框，
+   若层级低于 #bootScr 会被「加载中」遮住而永远弹不出来，表现为卡死 */
+#codeScr{z-index:80;}
 .lock-card{width:min(400px,100%);text-align:center;border:1px solid var(--line);border-radius:var(--r-lg);padding:var(--sp-7) var(--sp-6) var(--sp-6);background:var(--card);box-shadow:var(--shadow)}
 .lock-badge{width:64px;height:64px;margin:0 auto var(--sp-4);border-radius:var(--r-lg);display:grid;place-items:center;background:var(--primary);color:#fff}
 .lock-badge svg{width:30px;height:30px}
